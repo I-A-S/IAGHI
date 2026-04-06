@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/libauxid" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/out/build/IAGHI-x64-windows/_deps/dearimgui_cmake-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/out/build/IAGHI-x64-windows/_deps/glm-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/out/build/IAGHI-x64-windows/_deps/sdl-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/out/build/IAGHI-x64-windows/_deps/volk-src" vcs="Git" />
+  </component>
+</project>
