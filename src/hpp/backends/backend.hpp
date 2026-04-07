@@ -73,9 +73,12 @@ namespace ghi
     } -> std::same_as<void>;
 
     {
-      backend.create_shader(std::declval<Device>(), std::declval<const void *>(), std::declval<usize>(), std::declval<EShaderStage>())
+      backend.create_shader(std::declval<Device>(), std::declval<const void *>(), std::declval<usize>(),
+                            std::declval<EShaderStage>())
     } -> std::same_as<Result<Shader>>;
     { backend.destroy_shader(std::declval<Device>(), std::declval<Shader>()) } -> std::same_as<void>;
+
+    { backend.get_swapchain_format(std::declval<Device>()) } -> std::same_as<EFormat>;
 
     // { [IATODO]
     //   backend.create_compute_pipeline(std::declval<Device>(), std::declval<const ComputePipelineDesc *>())
@@ -104,7 +107,7 @@ namespace ghi
     { backend.cmd_bind_pipeline(std::declval<CommandBuffer>(), std::declval<Pipeline>()) } -> std::same_as<void>;
 
     {
-      backend.cmd_bind_descriptor_table(std::declval<CommandBuffer>(), std::declval<u32>(),
+      backend.cmd_bind_descriptor_table(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<Pipeline>(),
                                         std::declval<DescriptorTable>())
     } -> std::same_as<void>;
 

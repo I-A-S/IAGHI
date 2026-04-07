@@ -142,6 +142,10 @@ namespace ghi
     backend.destroy_pipeline(device, pipeline);
   }
 
+  auto get_swapchain_format(Device device) -> EFormat
+  {
+    return backend.get_swapchain_format(device);
+  }
 } // namespace ghi
 
 namespace ghi
@@ -162,9 +166,9 @@ namespace ghi
     backend.cmd_bind_pipeline(cmd, pipeline);
   }
 
-  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, DescriptorTable table) -> void
+  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table) -> void
   {
-    backend.cmd_bind_descriptor_table(cmd, set_index, table);
+    backend.cmd_bind_descriptor_table(cmd, set_index, pipeline, table);
   }
 
   auto cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void

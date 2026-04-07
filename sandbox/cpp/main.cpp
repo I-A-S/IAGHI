@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "auxid/containers/vec.hpp"
+#define _CRT_SECURE_NO_WARNINGS
 
-#include <memory>
+#include <auxid/auxid.hpp>
+#include <auxid/containers/vec.hpp>
+
 #include <iaghi/iaghi.hpp>
+#include <iaghi/utils.hpp>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -25,19 +28,30 @@
 
 namespace ghi
 {
-  auto load_shader_from_file(ghi::Device device, const char *filename, EShaderStage stage) -> Result<ghi::Shader>
-  {
-    const auto f = fopen(filename, "rb");
-    if (!f)
-      return fail("failed to open file '%s'", filename);
-    fseek(f, 0, SEEK_END);
-    const auto size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    auto buffer = new u8[size];
-    fread(buffer, 1, size, f);
-    fclose(f);
-    return ghi::create_shader(device, buffer, size, stage);
-  }
+  const auto VERTEX_SHADER_SRC = R"(
+#version 460
+layout(location = 0) in vec2 inPosition;
+layout(location = 1) in vec2 inTexCoord;
+
+layout(location = 0) out vec2 vUV;
+
+void main()
+{
+    gl_Position = vec4(inPosition, 0.0, 1.0);
+    vUV = inTexCoord;
+}
+)";
+
+  const auto FRAGMENT_SHADER_SRC = R"(
+#version 460
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outColor;
+
+void main()
+{
+    outColor = vec4(vUV, 0.5, 1.0);
+}
+)";
 
   auto main() -> Result<void>
   {
@@ -73,29 +87,28 @@ namespace ghi
 
     ghi::set_clear_color(100.0f / 255.0f, 149.0f / 255.0f, 237.0f / 255.0f, 1.0f);
 
-    const auto vertex_shader =
-        AU_TRY(load_shader_from_file(device, "sandbox/shaders/forward.vert.spv", EShaderStage::Vertex));
-    const auto fragment_shader =
-        AU_TRY(load_shader_from_file(device, "sandbox/shaders/forward.frag.spv", EShaderStage::Fragment));
+    const auto vertex_shader = AU_TRY(utils::compile_glsl(device, VERTEX_SHADER_SRC, EShaderStage::Vertex));
+    const auto fragment_shader = AU_TRY(utils::compile_glsl(device, FRAGMENT_SHADER_SRC, EShaderStage::Fragment));
 
     VertexInputBinding vertex_input_binding{
         .binding = 0,
-        .input_rate = EInputRate::Vertex,
         .stride = sizeof(glm::vec4),
+        .input_rate = EInputRate::Vertex,
     };
 
     VertexInputAttribute vertex_input_attributes[2] = {
-        {.binding = 0, .location = 0, .format = EFormat::R32G32Float, .offset = 0},
-        {.binding = 0, .location = 1, .format = EFormat::R32G32Float, .offset = sizeof(glm::vec2)},
+        {.location = 0, .binding = 0, .format = EFormat::R32G32Float, .offset = 0},
+        {.location = 1, .binding = 0, .format = EFormat::R32G32Float, .offset = sizeof(glm::vec2)},
     };
 
-    auto color_format = EFormat::B8G8R8A8Srgb;
+    auto color_format = ghi::get_swapchain_format(device);
     ghi::GraphicsPipelineDesc pipeline_desc{
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
         .binding_layout_count = 0,
         .color_formats = &color_format,
         .color_attachment_count = 1,
+        .depth_format = EFormat::D32Sfloat,
         .cull_mode = ECullMode::None,
         .vertex_bindings = &vertex_input_binding,
         .vertex_binding_count = 1,
@@ -103,6 +116,9 @@ namespace ghi
         .vertex_attribute_count = 2,
     };
     const auto pipeline = AU_TRY(ghi::create_graphics_pipeline(device, &pipeline_desc));
+
+    ghi::destroy_shader(device, vertex_shader);
+    ghi::destroy_shader(device, fragment_shader);
 
     Vec<glm::vec4> vertices = {
         {-0.5f, 0.5f, 0.0f, 0.0f},
@@ -159,6 +175,11 @@ namespace ghi
 
       ghi::end_frame(device);
     }
+
+    ghi::wait_idle(device);
+
+    ghi::destroy_pipeline(device, pipeline);
+    ghi::destroy_buffers(device, 1, &vertex_buffer);
 
     ghi::destroy_device(device);
 

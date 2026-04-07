@@ -101,16 +101,16 @@ namespace ghi
       result.binding_types[entry.binding] = b.descriptorType;
     }
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = (u32) bindings.size();
-    layoutInfo.pBindings = bindings.data();
+    VkDescriptorSetLayoutCreateInfo layout_info{};
+    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_info.bindingCount = static_cast<u32>(bindings.size());
+    layout_info.pBindings = bindings.data();
 
-    VkDescriptorSetLayout layoutHandle;
-    VK_CALL(vkCreateDescriptorSetLayout(device.get_handle(), &layoutInfo, nullptr, &layoutHandle),
+    VkDescriptorSetLayout layout_handle;
+    VK_CALL(vkCreateDescriptorSetLayout(device.get_handle(), &layout_info, nullptr, &layout_handle),
             "creating descriptor set layout");
 
-    result.handle = layoutHandle;
+    result.handle = layout_handle;
 
     return result;
   }
@@ -154,13 +154,13 @@ namespace ghi
   {
     VulkanDescriptorTable result;
 
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = device.get_descriptor_pool();
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &layout->handle;
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = device.get_descriptor_pool();
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts = &layout->handle;
 
-    VK_CALL(vkAllocateDescriptorSets(device.get_handle(), &allocInfo, &result.handle), "allocating descriptor set");
+    VK_CALL(vkAllocateDescriptorSets(device.get_handle(), &alloc_info, &result.handle), "allocating descriptor set");
 
     result.layout = layout;
 
@@ -192,40 +192,40 @@ namespace ghi
         fragment_shader_module->stage_create_info,
     };
 
-    Vec<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    Vec<VkDynamicState> dynamic_states = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
-    VkPipelineDynamicStateCreateInfo dynamicState{};
-    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<u32>(dynamicStates.size());
-    dynamicState.pDynamicStates = dynamicStates.data();
+    VkPipelineDynamicStateCreateInfo dynamic_state{};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamicStateCount = static_cast<u32>(dynamic_states.size());
+    dynamic_state.pDynamicStates = dynamic_states.data();
 
     auto vertex_bindings = map_vertex_bindings_vk(desc.vertex_bindings, desc.vertex_binding_count);
     auto vertex_attributes = map_vertex_attributes_vk(desc.vertex_attributes, desc.vertex_attribute_count);
 
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = static_cast<u32>(vertex_bindings.size());
-    vertexInputInfo.pVertexBindingDescriptions = vertex_bindings.data();
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<u32>(vertex_attributes.size());
-    vertexInputInfo.pVertexAttributeDescriptions = vertex_attributes.data();
+    VkPipelineVertexInputStateCreateInfo vertex_input_info{};
+    vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_info.vertexBindingDescriptionCount = static_cast<u32>(vertex_bindings.size());
+    vertex_input_info.pVertexBindingDescriptions = vertex_bindings.data();
+    vertex_input_info.vertexAttributeDescriptionCount = static_cast<u32>(vertex_attributes.size());
+    vertex_input_info.pVertexAttributeDescriptions = vertex_attributes.data();
 
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+    input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.primitiveRestartEnable = VK_FALSE;
+    input_assembly.topology = VulkanBackend::map_primitive_type_to_vk(desc.primitive_type);
 
-    VkPipelineViewportStateCreateInfo viewportState{};
-    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount = 1;
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.scissorCount = 1;
 
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = VulkanBackend::map_polygon_mode_to_vk(desc.polygon_mode);
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_NONE; // [IATODO]
+    rasterizer.cullMode = VulkanBackend::map_cull_mode_to_vk(desc.cull_mode);
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -234,53 +234,46 @@ namespace ghi
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.blendEnable = VK_FALSE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.colorWriteMask =
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    const auto color_blend_attachment = VulkanBackend::map_blend_mode_to_vk(desc.blend_mode);
+    VkPipelineColorBlendStateCreateInfo color_blending{};
+    color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blending.logicOpEnable = VK_FALSE;
+    color_blending.attachmentCount = 1;
+    color_blending.pAttachments = &color_blend_attachment;
 
-    VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.logicOpEnable = VK_FALSE;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
+    Vec<VkFormat> color_attachments;
+    for (u32 i = 0; i < desc.color_attachment_count; ++i)
+      color_attachments.push_back(VulkanBackend::map_format_enum_to_vk(desc.color_formats[i]));
 
-    VkFormat color_attachment_format = VK_FORMAT_B8G8R8A8_SRGB; // [IATODO]: Get from params
-    VkFormat depth_attachment_format = VK_FORMAT_D32_SFLOAT;
+    VkFormat depth_attachment_format = VulkanBackend::map_format_enum_to_vk(desc.depth_format);
 
-    VkPipelineRenderingCreateInfo renderingInfo{};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachmentFormats = &color_attachment_format;
-    renderingInfo.depthAttachmentFormat = depth_attachment_format;
+    VkPipelineRenderingCreateInfo rendering_info{};
+    rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    rendering_info.colorAttachmentCount = color_attachments.size();
+    rendering_info.pColorAttachmentFormats = color_attachments.data();
+    rendering_info.depthAttachmentFormat = depth_attachment_format;
 
-    VkPipelineDepthStencilStateCreateInfo depthStencil{};
-    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-    depthStencil.depthBoundsTestEnable = VK_FALSE;
-    depthStencil.stencilTestEnable = VK_FALSE;
+    VkPipelineDepthStencilStateCreateInfo depth_stencil{};
+    depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil.depthTestEnable = VK_TRUE;
+    depth_stencil.depthWriteEnable = VK_TRUE;
+    depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    depth_stencil.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil.stencilTestEnable = VK_FALSE;
 
     VkGraphicsPipelineCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &renderingInfo,
+        .pNext = &rendering_info,
         .stageCount = _countof(shader_stages),
         .pStages = shader_stages,
-        .pVertexInputState = &vertexInputInfo,
-        .pInputAssemblyState = &inputAssembly,
-        .pViewportState = &viewportState,
+        .pVertexInputState = &vertex_input_info,
+        .pInputAssemblyState = &input_assembly,
+        .pViewportState = &viewport_state,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
-        .pDepthStencilState = &depthStencil,
-        .pColorBlendState = &colorBlending,
-        .pDynamicState = &dynamicState,
+        .pDepthStencilState = &depth_stencil,
+        .pColorBlendState = &color_blending,
+        .pDynamicState = &dynamic_state,
         .layout = result.m_layout.handle,
     };
 
@@ -293,5 +286,6 @@ namespace ghi
   auto VulkanGraphicsPipeline::destroy(VulkanDevice &device) -> void
   {
     vkDestroyPipeline(device.get_handle(), m_handle, nullptr);
+    m_layout.destroy(device);
   }
 } // namespace ghi

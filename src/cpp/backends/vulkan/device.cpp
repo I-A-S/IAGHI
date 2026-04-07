@@ -212,6 +212,10 @@ namespace ghi
     VkPhysicalDeviceFeatures2 enable_device_features2{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &enable_vulkan13_features,
+        .features =
+            {
+                .fillModeNonSolid = true,
+            },
     };
 
     VkDeviceCreateInfo device_create_info{};
@@ -280,18 +284,18 @@ namespace ghi
 
     result.m_swapchain = AU_TRY(VulkanSwapchain::create(result, init_info.surface_width, init_info.surface_height));
 
-    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000}};
+    VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000}};
 
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 4;
-    poolInfo.pPoolSizes = poolSizes;
-    poolInfo.maxSets = 1000;
+    VkDescriptorPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.poolSizeCount = 4;
+    pool_info.pPoolSizes = pool_sizes;
+    pool_info.maxSets = 1000;
 
-    VK_CALL(vkCreateDescriptorPool(result.m_handle, &poolInfo, nullptr, &result.m_descriptor_pool),
+    VK_CALL(vkCreateDescriptorPool(result.m_handle, &pool_info, nullptr, &result.m_descriptor_pool),
             "create descriptor pool");
 
     return result;
@@ -301,7 +305,13 @@ namespace ghi
   {
     vkDeviceWaitIdle(m_handle);
 
+    vkDestroyDescriptorPool(m_handle, m_descriptor_pool, nullptr);
+    vkDestroyFence(m_handle, m_single_time_command_fence, nullptr);
+    vkDestroyCommandPool(m_handle, m_single_time_command_pool, nullptr);
+
     m_swapchain.destroy(*this);
+
+    vmaDestroyAllocator(m_allocator);
 
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vkDestroyDevice(m_handle, nullptr);

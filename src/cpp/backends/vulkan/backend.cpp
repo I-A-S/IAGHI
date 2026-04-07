@@ -94,25 +94,89 @@ namespace ghi
     }
   }
 
+  auto VulkanBackend::map_vk_to_format_enum(VkFormat format) -> EFormat
+  {
+    switch (format)
+    {
+    case VK_FORMAT_UNDEFINED:
+      return EFormat::Undefined;
+
+    case VK_FORMAT_R8G8B8A8_UNORM:
+      return EFormat::R8G8B8A8Unorm;
+    case VK_FORMAT_R8G8B8A8_SRGB:
+      return EFormat::R8G8B8A8Srgb;
+    case VK_FORMAT_B8G8R8A8_SRGB:
+      return EFormat::B8G8R8A8Srgb;
+    case VK_FORMAT_B8G8R8A8_UNORM:
+      return EFormat::B8G8R8A8Unorm;
+
+    case VK_FORMAT_R32_UINT:
+      return EFormat::R32Uint;
+    case VK_FORMAT_R32_SFLOAT:
+      return EFormat::R32Float;
+    case VK_FORMAT_R32G32_SFLOAT:
+      return EFormat::R32G32Float;
+    case VK_FORMAT_R32G32B32_SFLOAT:
+      return EFormat::R32G32B32Float;
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+      return EFormat::R32G32B32A32Float;
+
+    case VK_FORMAT_D16_UNORM:
+      return EFormat::D16Unorm;
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+      return EFormat::D16UnormS8Uint;
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+      return EFormat::D24UnormS8Uint;
+    case VK_FORMAT_D32_SFLOAT:
+      return EFormat::D32Sfloat;
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+      return EFormat::D32SfloatS8Uint;
+
+    case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+      return EFormat::Bc1RgbUnormBlock;
+    case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+      return EFormat::Bc1RgbSrgbBlock;
+    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+      return EFormat::Bc1RgbaUnormBlock;
+    case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+      return EFormat::Bc1RgbaSrgbBlock;
+    case VK_FORMAT_BC2_UNORM_BLOCK:
+      return EFormat::Bc2UnormBlock;
+    case VK_FORMAT_BC2_SRGB_BLOCK:
+      return EFormat::Bc2SrgbBlock;
+    case VK_FORMAT_BC3_UNORM_BLOCK:
+      return EFormat::Bc3UnormBlock;
+    case VK_FORMAT_BC3_SRGB_BLOCK:
+      return EFormat::Bc3SrgbBlock;
+    case VK_FORMAT_BC5_UNORM_BLOCK:
+      return EFormat::Bc5UnormBlock;
+    case VK_FORMAT_BC5_SNORM_BLOCK:
+      return EFormat::Bc5SnormBlock;
+
+    default:
+      return EFormat::Undefined;
+    }
+  }
+
   auto VulkanBackend::map_shader_stage_enum_to_vk(EShaderStage stage) -> VkShaderStageFlags
   {
-    VkShaderStageFlags vkFlags = 0;
+    VkShaderStageFlags vk_flags = 0;
     const u32 stage_bits = static_cast<u32>(stage);
 
     if (stage_bits & static_cast<u32>(EShaderStage::Vertex))
     {
-      vkFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+      vk_flags |= VK_SHADER_STAGE_VERTEX_BIT;
     }
     if (stage_bits & static_cast<u32>(EShaderStage::Fragment))
     {
-      vkFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+      vk_flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
     }
     if (stage_bits & static_cast<u32>(EShaderStage::Compute))
     {
-      vkFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+      vk_flags |= VK_SHADER_STAGE_COMPUTE_BIT;
     }
 
-    return vkFlags;
+    return vk_flags;
   }
 
   auto VulkanBackend::map_buffer_usage_enum_to_vk(u32 usage_flags) -> VkBufferUsageFlags
@@ -182,6 +246,124 @@ namespace ghi
     }
   }
 
+  auto VulkanBackend::map_polygon_mode_to_vk(EPolygonMode mode) -> VkPolygonMode
+  {
+    switch (mode)
+    {
+    case EPolygonMode::Fill:
+      return VK_POLYGON_MODE_FILL;
+    case EPolygonMode::Line:
+      return VK_POLYGON_MODE_LINE;
+    case EPolygonMode::Point:
+      return VK_POLYGON_MODE_POINT;
+    default:
+      return VK_POLYGON_MODE_FILL;
+    }
+  }
+
+  auto VulkanBackend::map_cull_mode_to_vk(ECullMode mode) -> VkCullModeFlags
+  {
+    switch (mode)
+    {
+    case ECullMode::None:
+      return VK_CULL_MODE_NONE;
+    case ECullMode::Back:
+      return VK_CULL_MODE_BACK_BIT;
+    case ECullMode::Front:
+      return VK_CULL_MODE_FRONT_BIT;
+    default:
+      return VK_CULL_MODE_NONE;
+    }
+  }
+
+  auto VulkanBackend::map_primitive_type_to_vk(EPrimitiveType type) -> VkPrimitiveTopology
+  {
+    switch (type)
+    {
+    case EPrimitiveType::PointList:
+      return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    case EPrimitiveType::LineList:
+      return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    case EPrimitiveType::LineStrip:
+      return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+    case EPrimitiveType::TriangleList:
+      return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    case EPrimitiveType::TriangleStrip:
+      return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    default:
+      return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    }
+  }
+
+  auto VulkanBackend::map_blend_mode_to_vk(EBlendMode mode) -> VkPipelineColorBlendAttachmentState
+  {
+    VkPipelineColorBlendAttachmentState state{};
+    state.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    switch (mode)
+    {
+    case EBlendMode::Opaque:
+      state.blendEnable = VK_FALSE;
+      break;
+
+    case EBlendMode::Alpha:
+      state.blendEnable = VK_TRUE;
+      state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+      state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      state.colorBlendOp = VK_BLEND_OP_ADD;
+      state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      state.alphaBlendOp = VK_BLEND_OP_ADD;
+      break;
+
+    case EBlendMode::Premultiplied:
+      state.blendEnable = VK_TRUE;
+      state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      state.colorBlendOp = VK_BLEND_OP_ADD;
+      state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      state.alphaBlendOp = VK_BLEND_OP_ADD;
+      break;
+
+    case EBlendMode::Additive:
+      state.blendEnable = VK_TRUE;
+      state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.colorBlendOp = VK_BLEND_OP_ADD;
+      state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.alphaBlendOp = VK_BLEND_OP_ADD;
+      break;
+
+    case EBlendMode::Multiply:
+      state.blendEnable = VK_TRUE;
+      state.srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
+      state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      state.colorBlendOp = VK_BLEND_OP_ADD;
+      state.srcAlphaBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
+      state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      state.alphaBlendOp = VK_BLEND_OP_ADD;
+      break;
+
+    case EBlendMode::Modulate:
+      state.blendEnable = VK_TRUE;
+      state.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      state.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
+      state.colorBlendOp = VK_BLEND_OP_ADD;
+      state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      state.dstAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+      state.alphaBlendOp = VK_BLEND_OP_ADD;
+      break;
+
+    default:
+      state.blendEnable = VK_FALSE;
+      break;
+    }
+
+    return state;
+  }
 } // namespace ghi
 
 namespace ghi
@@ -194,7 +376,9 @@ namespace ghi
 
   auto VulkanBackend::destroy_device(Device device) -> void
   {
-    delete reinterpret_cast<VulkanDevice *>(device);
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    dev->destroy();
+    delete dev;
   }
 
   auto VulkanBackend::create_buffers(Device device, u32 count, const BufferDesc *descs, Buffer *out_handles)
@@ -205,9 +389,9 @@ namespace ghi
     for (u32 i = 0; i < count; i++)
     {
       const auto &desc = descs[i];
-      const auto buffer =
-          AU_TRY(VulkanBuffer::create(dev->m_allocator, desc.size_bytes, map_buffer_usage_enum_to_vk((u32) desc.usage),
-                                      desc.cpu_visible, desc.debug_name));
+      const auto buffer = AU_TRY(VulkanBuffer::create(dev->m_allocator, desc.size_bytes,
+                                                      map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
+                                                      desc.cpu_visible, desc.debug_name));
       out_handles[i] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
     }
 
@@ -591,7 +775,8 @@ namespace ghi
         imageInfo.imageView = image_impl->get_view();
         imageInfo.sampler = sampler;
 
-        if (*target_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER || *target_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+        if (*target_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
+            *target_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
         {
           imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         }
@@ -638,6 +823,12 @@ namespace ghi
     const auto pipeline_impl = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
     pipeline_impl->destroy(*dev);
     delete pipeline_impl;
+  }
+
+  auto VulkanBackend::get_swapchain_format(Device device) -> EFormat
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    return map_vk_to_format_enum(dev->m_swapchain.m_format);
   }
 
   auto VulkanBackend::begin_frame(Device device) -> CommandBuffer
@@ -800,12 +991,17 @@ namespace ghi
 
   auto VulkanBackend::cmd_bind_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void
   {
-    const auto p = reinterpret_cast<VulkanGraphicsPipeline*>(pipeline);
+    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
     vkCmdBindPipeline(reinterpret_cast<VkCommandBuffer>(cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, p->get_handle());
   }
 
-  auto VulkanBackend::cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, DescriptorTable table) -> void
+  auto VulkanBackend::cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline,
+                                                DescriptorTable table) -> void
   {
+    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    const auto *impl = reinterpret_cast<VulkanDescriptorTable *>(table);
+    vkCmdBindDescriptorSets(reinterpret_cast<VkCommandBuffer>(cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, p->get_layout(),
+                            set_index, 1, &impl->handle, 0, nullptr);
   }
 
   auto VulkanBackend::cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void

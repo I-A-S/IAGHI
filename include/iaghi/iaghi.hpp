@@ -247,10 +247,10 @@ namespace ghi
     u32 color_attachment_count;
     EFormat depth_format;
 
-    ECullMode cull_mode;
-    EBlendMode blend_mode;
-    EPolygonMode polygon_mode;
-    EPrimitiveType primitive_type;
+    ECullMode cull_mode{ECullMode::Back};
+    EBlendMode blend_mode{EBlendMode::Alpha};
+    EPolygonMode polygon_mode{EPolygonMode::Fill};
+    EPrimitiveType primitive_type{EPrimitiveType::TriangleList};
 
     VertexInputBinding* vertex_bindings;
     u32 vertex_binding_count;
@@ -333,6 +333,8 @@ namespace ghi
   auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc *desc) -> Result<Pipeline>;
   auto destroy_pipeline(Device device, Pipeline pipeline) -> void;
 
+  auto get_swapchain_format(Device device) -> EFormat;
+
   auto begin_frame(Device device) -> CommandBuffer;
   auto end_frame(Device device) -> void;
 
@@ -345,7 +347,7 @@ namespace ghi
 
   auto cmd_bind_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void;
 
-  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, DescriptorTable table) -> void;
+  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table) -> void;
 
   auto cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void;
   auto cmd_set_scissor(CommandBuffer cmd, INT32 x, INT32 y, INT32 w, INT32 h) -> void;

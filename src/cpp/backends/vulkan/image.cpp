@@ -77,8 +77,8 @@ namespace ghi
 
   auto VulkanImage::destroy(VkDevice device, VmaAllocator allocator) -> void
   {
-    vkDestroyImage(device, m_handle, nullptr);
     vkDestroyImageView(device, m_view, nullptr);
-    vmaFreeMemory(allocator, m_allocation);
+    vmaDestroyImage(allocator, m_handle, m_allocation);
+    m_handle = VK_NULL_HANDLE;
   }
 } // namespace ghi

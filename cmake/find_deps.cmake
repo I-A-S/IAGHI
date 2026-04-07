@@ -16,14 +16,57 @@ FetchContent_Declare(
         EXCLUDE_FROM_ALL
 )
 
-FetchContent_Declare(
-        DearImGui_CMake
-        GIT_REPOSITORY https://github.com/I-A-S/imgui-cmake
-        GIT_TAG        main
-        OVERRIDE_FIND_PACKAGE
-)
+FetchContent_MakeAvailable(volk VulkanMemoryAllocator)
 
-FetchContent_MakeAvailable(volk VulkanMemoryAllocator DearImGui_CMake)
+if(IAGHI_BUILD_UTILS)
+    FetchContent_Declare(
+            DearImGui_CMake
+            GIT_REPOSITORY https://github.com/I-A-S/imgui-cmake
+            GIT_TAG        main
+            OVERRIDE_FIND_PACKAGE
+    )
+
+    FetchContent_Declare(
+            STB_CMake
+            GIT_REPOSITORY https://github.com/I-A-S/stb-cmake
+            GIT_TAG        main
+            OVERRIDE_FIND_PACKAGE
+    )
+
+    FetchContent_Declare(
+            spirv-headers
+            GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Headers.git
+            GIT_TAG        vulkan-sdk-1.4.341.0
+            SYSTEM
+            EXCLUDE_FROM_ALL
+    )
+
+    FetchContent_MakeAvailable(STB_CMake DearImGui_CMake spirv-headers)
+
+    FetchContent_Declare(
+            spirv-tools
+            GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Tools.git
+            GIT_TAG        v2026.1
+            SYSTEM
+            EXCLUDE_FROM_ALL
+    )
+    set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
+    set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(spirv-tools)
+
+    FetchContent_Declare(
+            glslang
+            GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+            GIT_TAG        vulkan-sdk-1.4.341.0
+            SYSTEM
+            EXCLUDE_FROM_ALL
+    )
+    set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(glslang)
+endif ()
 
 if(IAGHI_BUILD_SANDBOX)
     FetchContent_Declare(
@@ -40,12 +83,5 @@ if(IAGHI_BUILD_SANDBOX)
             OVERRIDE_FIND_PACKAGE
     )
 
-    FetchContent_Declare(
-            STB_CMake
-            GIT_REPOSITORY https://github.com/I-A-S/stb-cmake
-            GIT_TAG        main
-            OVERRIDE_FIND_PACKAGE
-    )
-
-    FetchContent_MakeAvailable(SDL glm STB_CMake)
+    FetchContent_MakeAvailable(SDL glm)
 endif()

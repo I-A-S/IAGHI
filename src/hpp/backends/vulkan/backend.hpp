@@ -64,7 +64,8 @@ public:
     auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>;
     auto destroy_binding_layout(Device device, BindingLayout layout) -> void;
 
-    auto create_descriptor_tables(Device device, BindingLayout layout, u32 count, DescriptorTable *out_tables) -> Result<void>;
+    auto create_descriptor_tables(Device device, BindingLayout layout, u32 count, DescriptorTable *out_tables)
+        -> Result<void>;
     auto update_descriptor_tables(Device device, u32 count, const DescriptorUpdate *updates) -> void;
 
     auto create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage) -> Result<Shader>;
@@ -72,6 +73,8 @@ public:
 
     auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc *desc) -> Result<Pipeline>;
     auto destroy_pipeline(Device device, Pipeline pipeline) -> void;
+
+    auto get_swapchain_format(Device device) -> EFormat;
 
     auto begin_frame(Device device) -> CommandBuffer;
     auto end_frame(Device device) -> void;
@@ -85,7 +88,7 @@ public:
 
     auto cmd_bind_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void;
 
-    auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, DescriptorTable table) -> void;
+    auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table) -> void;
 
     auto cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void;
     auto cmd_set_scissor(CommandBuffer cmd, INT32 x, INT32 y, INT32 w, INT32 h) -> void;
@@ -104,10 +107,15 @@ public:
 public:
     static auto is_vk_depth_format(VkFormat format) -> bool;
     static auto map_format_enum_to_vk(EFormat format) -> VkFormat;
+    static auto map_vk_to_format_enum(VkFormat format) -> EFormat;
     static auto map_shader_stage_enum_to_vk(EShaderStage stage) -> VkShaderStageFlags;
     static auto map_buffer_usage_enum_to_vk(u32 usage_flags) -> VkBufferUsageFlags;
     static auto map_descriptor_type_enum_to_vk(EDescriptorType type) -> VkDescriptorType;
     static auto map_input_rate_enum_to_vk(EInputRate rate) -> VkVertexInputRate;
+    static auto map_polygon_mode_to_vk(EPolygonMode mode) -> VkPolygonMode;
+    static auto map_cull_mode_to_vk(ECullMode mode) -> VkCullModeFlags;
+    static auto map_primitive_type_to_vk(EPrimitiveType type) -> VkPrimitiveTopology;
+    static auto map_blend_mode_to_vk(EBlendMode mode) -> VkPipelineColorBlendAttachmentState;
 
 private:
     f32 m_clear_color[4]{};

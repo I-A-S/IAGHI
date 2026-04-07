@@ -23,6 +23,7 @@ endif()
 
 auxid_setup_project()
 
+option(IAGHI_BUILD_UTILS "Build GHI Utils" ON)
 option(IAGHI_BUILD_TESTS "Build unit tests" ${IAGHI_IS_TOP_LEVEL})
 option(IAGHI_BUILD_SANDBOX "Build sandbox project" ${IAGHI_IS_TOP_LEVEL})
 
