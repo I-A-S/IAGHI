@@ -1,6 +1,7 @@
 <div align="center">
   <img src="logo.png" alt="IAGHI Logo" width="190" style="border-radius: 1.15rem;"/>
   <br/>
+  <br/>
 
   <img src="https://img.shields.io/badge/license-apache_v2-blue.svg" alt="License"/>
   <img src="https://img.shields.io/badge/platform-Auxid-yellow.svg" alt="Platform"/>
