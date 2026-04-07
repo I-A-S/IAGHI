@@ -46,6 +46,16 @@ namespace ghi
     backend.set_clear_color(r, g, b, a);
   }
 
+  auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)>& commands_callback) -> Result<void>
+  {
+    return backend.execute_single_time_commands(device, commands_callback);
+  }
+
+  auto cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset, u64 dst_offset) -> void
+  {
+    backend.cmd_copy_buffer(cmd, src, dst, size, src_offset, dst_offset);
+  }
+
   auto wait_idle(Device device) -> void
   {
     backend.wait_idle(device);

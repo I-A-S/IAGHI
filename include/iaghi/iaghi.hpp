@@ -17,6 +17,8 @@
 
 #include <auxid/auxid.hpp>
 
+#include <functional>
+
 namespace ghi
 {
   using namespace au;
@@ -111,6 +113,7 @@ namespace ghi
     StorageBuffer,
     SampledImage,
     StorageImage,
+    CombinedImageSampler,
   };
 
   enum class EInputRate
@@ -182,13 +185,13 @@ namespace ghi
 
   typedef struct ImageDesc
   {
-    u32 width;
-    u32 height;
-    u32 depth;
-    u32 mip_levels;
-    EFormat format;
-    u32 array_layers;
-    ETextureType type;
+    u32 width{1};
+    u32 height{1};
+    u32 depth{1};
+    u32 mip_levels{1};
+    EFormat format{};
+    u32 array_layers{1};
+    ETextureType type{ETextureType::_2D};
     const char *debug_name;
   } ImageDesc;
 
@@ -240,7 +243,7 @@ namespace ghi
   {
     Shader vertex_shader;
     Shader fragment_shader;
-    BindingLayout *binding_layouts;
+    const BindingLayout *binding_layouts;
     u32 binding_layout_count;
 
     EFormat *color_formats;
@@ -252,9 +255,9 @@ namespace ghi
     EPolygonMode polygon_mode{EPolygonMode::Fill};
     EPrimitiveType primitive_type{EPrimitiveType::TriangleList};
 
-    VertexInputBinding* vertex_bindings;
+    VertexInputBinding *vertex_bindings;
     u32 vertex_binding_count;
-    VertexInputAttribute* vertex_attributes;
+    VertexInputAttribute *vertex_attributes;
     u32 vertex_attribute_count;
   } GraphicsPipelineDesc;
 
@@ -310,8 +313,8 @@ namespace ghi
 
   auto create_images(Device device, u32 count, const ImageDesc *descs, Image *out_handles) -> Result<void>;
   auto destroy_images(Device device, u32 count, Image *handles) -> void;
-  auto upload_image_data(Device device, u32 count, Image *handles, const u8 **image_data,
-                                 bool generate_mip_maps) -> Result<void>;
+  auto upload_image_data(Device device, u32 count, Image *handles, const u8 **image_data, bool generate_mip_maps)
+      -> Result<void>;
 
   auto is_depth_format(EFormat format) -> bool;
   auto is_compressed_format(EFormat format) -> bool;
@@ -323,7 +326,8 @@ namespace ghi
   auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>;
   auto destroy_binding_layout(Device device, BindingLayout layout) -> void;
 
-  auto create_descriptor_tables(Device device, BindingLayout layout, u32 count, DescriptorTable *out_tables) -> Result<void>;
+  auto create_descriptor_tables(Device device, BindingLayout layout, u32 count, DescriptorTable *out_tables)
+      -> Result<void>;
   auto update_descriptor_tables(Device device, u32 count, const DescriptorUpdate *updates) -> void;
 
   auto create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage) -> Result<Shader>;
@@ -340,6 +344,12 @@ namespace ghi
 
   auto wait_idle(Device device) -> void;
   auto set_clear_color(f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;
+
+  auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)> &commands_callback)
+      -> Result<void>;
+
+  auto cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset = 0, u64 dst_offset = 0)
+      -> void;
 
   auto cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, u32 count, const Buffer *buffers,
                                const u64 *offsets) -> void;

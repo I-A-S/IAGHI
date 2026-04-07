@@ -225,9 +225,12 @@ namespace ghi
     case EDescriptorType::StorageBuffer:
       return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case EDescriptorType::SampledImage:
-      return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     case EDescriptorType::StorageImage:
       return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case EDescriptorType::CombinedImageSampler:
+      return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
     default:
       return VK_DESCRIPTOR_TYPE_MAX_ENUM;
     }
@@ -960,10 +963,33 @@ namespace ghi
     m_clear_color[2] = b;
     m_clear_color[3] = a;
   }
+
+  auto VulkanBackend::execute_single_time_commands(Device device,
+                                                   const std::function<void(CommandBuffer)> &commands_callback)
+      -> Result<void>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    return dev->execute_single_time_commands([=](VkCommandBuffer cmd) {
+      commands_callback(reinterpret_cast<CommandBuffer>(cmd));
+    });
+  }
 } // namespace ghi
 
 namespace ghi
 {
+  auto VulkanBackend::cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset,
+                                    u64 dst_offset) -> void
+  {
+    const auto src_impl = reinterpret_cast<VulkanBuffer *>(src);
+    const auto dst_impl = reinterpret_cast<VulkanBuffer *>(dst);
+    const VkBufferCopy copyRegion{
+      .srcOffset = src_offset,
+      .dstOffset = dst_offset,
+      .size = size,
+    };
+    vkCmdCopyBuffer(reinterpret_cast<VkCommandBuffer>(cmd), src_impl->handle, dst_impl->handle, 1, &copyRegion);
+  }
+
   auto VulkanBackend::cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, u32 count, const Buffer *buffers,
                                               const u64 *offsets) -> void
   {

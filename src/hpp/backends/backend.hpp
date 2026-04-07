@@ -96,6 +96,15 @@ namespace ghi
     { backend.wait_idle(std::declval<Device>()) } -> std::same_as<void>;
 
     {
+      backend.execute_single_time_commands(std::declval<Device>(), std::declval<const std::function<void(CommandBuffer)>&>())
+    } -> std::same_as<Result<void>>;
+
+    {
+      backend.cmd_copy_buffer(std::declval<CommandBuffer>(), std::declval<Buffer>(), std::declval<Buffer>(), std::declval<u64>(), std::declval<u64>(),
+                                       std::declval<u64>())
+    } -> std::same_as<void>;
+
+    {
       backend.cmd_bind_vertex_buffers(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<u32>(),
                                       std::declval<const Buffer *>(), std::declval<const u64 *>())
     } -> std::same_as<void>;

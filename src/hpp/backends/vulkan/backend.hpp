@@ -82,6 +82,11 @@ public:
     auto wait_idle(Device device) -> void;
     auto set_clear_color(f32 r, f32 g, f32 b, f32 a) -> void;
 
+    auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)> &commands_callback)
+        -> Result<void>;
+
+    auto cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset = 0, u64 dst_offset = 0) -> void;
+
     auto cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, u32 count, const Buffer *buffers,
                                  const u64 *offsets) -> void;
     auto cmd_bind_index_buffer(CommandBuffer cmd, Buffer buffer, u64 offset, bool use_32_bit_indices) -> void;
