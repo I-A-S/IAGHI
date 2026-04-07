@@ -26,17 +26,17 @@
 namespace ghi::utils
 {
   usize g_staging_buffer_size{64 * 1024};
-  Buffer g_staging_buffer{VK_NULL_HANDLE};
+  Buffer g_staging_buffer{NULL};
 
   auto ensure_min_staging_buffer_size(Device device, usize size) -> Result<void>
   {
     if (g_staging_buffer_size >= size)
       return {};
 
-    if (g_staging_buffer != VK_NULL_HANDLE)
+    if (g_staging_buffer != NULL)
     {
       ghi::destroy_buffers(device, 1, &g_staging_buffer);
-      g_staging_buffer = VK_NULL_HANDLE;
+      g_staging_buffer = NULL;
     }
 
     const BufferDesc buffer_desc{
@@ -66,7 +66,7 @@ namespace ghi::utils
   auto shutdown(Device device) -> void
   {
     ghi::destroy_buffers(device, 1, &g_staging_buffer);
-    g_staging_buffer = VK_NULL_HANDLE;
+    g_staging_buffer = ;
     g_staging_buffer_size = 0;
 
     glslang::FinalizeProcess();
