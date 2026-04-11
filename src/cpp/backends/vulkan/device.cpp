@@ -212,6 +212,7 @@ namespace ghi
     VkPhysicalDeviceVulkan12Features enable_vulkan12_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &enable_vulkan13_features,
+      .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
       .runtimeDescriptorArray = VK_TRUE,
     };
 
