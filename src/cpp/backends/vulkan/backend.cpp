@@ -844,19 +844,10 @@ namespace ghi
         buffer_info.range = (update.buffer_range == 0) ? VK_WHOLE_SIZE : update.buffer_range;
         write.pBufferInfo = &buffer_info;
 
-        if (update.update_all_frames)
+        for (u32 f = 0; f < buffer_impl->get_data_count(); f++)
         {
-          for (u32 f = 0; f < buffer_impl->get_data_count(); f++)
-          {
-            buffer_info.buffer = buffer_impl->get_data(f).handle;
-            write.dstSet = table_impl->handles[f];
-            vkUpdateDescriptorSets(dev->get_handle(), 1, &write, 0, nullptr);
-          }
-        }
-        else
-        {
-          buffer_info.buffer = buffer_impl->get_data((buffer_impl->get_data_count()  > 1) ? dev->get_swapchain().get_current_frame_index() : 0).handle;
-          write.dstSet = table_impl->handles[dev->get_swapchain().get_current_frame_index()];
+          buffer_info.buffer = buffer_impl->get_data(f).handle;
+          write.dstSet = table_impl->handles[f];
           vkUpdateDescriptorSets(dev->get_handle(), 1, &write, 0, nullptr);
         }
       }
@@ -883,7 +874,7 @@ namespace ghi
 
         write.pImageInfo = &image_info;
 
-        if (update.update_all_frames)
+        if (update.image_update_all_frames)
         {
           for (u32 f = 0; f < dev->get_swapchain().get_backbuffer_image_count(); f++)
           {

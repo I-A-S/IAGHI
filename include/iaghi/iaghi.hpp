@@ -212,8 +212,6 @@ namespace ghi
 
   typedef struct DescriptorUpdate
   {
-    bool update_all_frames{false};
-
     DescriptorTable table;
     u32 binding;
     u32 array_element;
@@ -224,6 +222,7 @@ namespace ghi
 
     Image image;
     Sampler sampler;
+    bool image_update_all_frames{false};
   } DescriptorUpdate;
 
   typedef struct VertexInputBinding
