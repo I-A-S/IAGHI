@@ -82,6 +82,19 @@ public:
       return m_current_sync_frame_index;
     }
 
+    [[nodiscard]] auto get_clear_color() const -> VkClearColorValue
+    {
+      return {m_clear_color[0], m_clear_color[1], m_clear_color[2], m_clear_color[3]};
+    }
+
+    auto set_clear_color(f32 r, f32 g, f32 b, f32 a = 1.0f) -> void
+    {
+      m_clear_color[0] = r;
+      m_clear_color[1] = g;
+      m_clear_color[2] = b;
+      m_clear_color[3] = a;
+    }
+
 private:
     VkSwapchainKHR m_handle{};
     VkExtent2D m_extent{};
@@ -94,6 +107,8 @@ private:
     u32 m_current_frame_index{};
     u32 m_current_sync_frame_index{};
     Frame m_frames[NUM_FRAMES_BUFFERED]{};
+
+    f32 m_clear_color[4]{};
 
     friend class VulkanDevice;
     friend class VulkanBackend;

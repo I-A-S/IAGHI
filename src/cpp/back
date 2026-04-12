@@ -1,0 +1,778 @@
+
+
+namespace ghi
+{
+  auto VulkanBackend::create_device(const InitInfo &init_info) -> Result<Device>
+  {
+    const auto device = AU_TRY(VulkanDevice::create(init_info));
+    return reinterpret_cast<Device>(new VulkanDevice(std::move(device)));
+  }
+
+  auto VulkanBackend::destroy_device(Device device) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    dev->destroy();
+    delete dev;
+  }
+
+  auto VulkanBackend::create_buffers(Device device, u32 count, const BufferDesc *descs, Buffer *out_handles)
+      -> Result<void>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      const auto &desc = descs[i];
+      const auto [vk_type, is_dynamic] = map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage));
+      const auto buffer =
+          AU_TRY(VulkanBuffer::create(*dev, desc.size_bytes, vk_type, is_dynamic, desc.cpu_visible, desc.debug_name));
+      out_handles[i] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
+    }
+
+    return {};
+  }
+
+  auto VulkanBackend::destroy_buffers(Device device, u32 count, const Buffer *handles) -> void
+  {
+    AU_UNUSED(device);
+    for (u32 i = 0; i < count; i++)
+    {
+      const auto buffer = reinterpret_cast<VulkanBuffer *>(handles[i]);
+      buffer->destroy();
+      delete buffer;
+    }
+  }
+
+  auto VulkanBackend::map_buffer(Device device, Buffer buffer) -> void *
+  {
+    return reinterpret_cast<VulkanBuffer *>(buffer)->map();
+  }
+
+  auto VulkanBackend::unmap_buffer(Device device, Buffer buffer) -> void
+  {
+    reinterpret_cast<VulkanBuffer *>(buffer)->unmap();
+  }
+
+  auto VulkanBackend::create_images(Device device, u32 count, const ImageDesc *descs, Image *out_handles)
+      -> Result<void>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      const auto &desc = descs[i];
+      const auto image = AU_TRY(VulkanImage::create(
+          dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format), {desc.width, desc.height, desc.depth},
+          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT, desc.array_layers,
+          desc.mip_levels)); // [IATODO]: Use ETextureType
+      out_handles[i] = reinterpret_cast<Image>(new VulkanImage(std::move(image)));
+    }
+
+    return {};
+  }
+
+  auto VulkanBackend::destroy_images(Device device, u32 count, Image *handles) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      auto image = reinterpret_cast<VulkanImage *>(handles[i]);
+      image->destroy(dev->m_handle, dev->m_allocator);
+      delete image;
+    }
+  }
+
+  auto VulkanBackend::upload_image_data(Device device, u32 count, Image *handles, const u8 **image_data,
+                                        bool generate_mip_maps) -> Result<void>
+  {
+    const auto insert_image_barrier = [](VkCommandBuffer cmdbuffer, VkImage image, VkAccessFlags srcAccessMask,
+                                         VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout,
+                                         VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
+                                         VkImageSubresourceRange subresourceRange) {
+      VkImageMemoryBarrier barrier = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+          .srcAccessMask = srcAccessMask,
+          .dstAccessMask = dstAccessMask,
+          .oldLayout = oldLayout,
+          .newLayout = newLayout,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .image = image,
+          .subresourceRange = subresourceRange,
+      };
+      vkCmdPipelineBarrier(cmdbuffer, srcStageMask, dstStageMask, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    };
+
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    if (count == 0)
+      return {};
+
+    VkDeviceSize totalSize = 0;
+    Vec<VkDeviceSize> offsets(count);
+    Vec<VkDeviceSize> textureByteSizes(count);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      auto impl = reinterpret_cast<VulkanImage *>(handles[i]);
+      if (!impl || !image_data[i])
+        continue;
+
+      offsets[i] = totalSize;
+      VkDeviceSize currentTextureSize = 0;
+
+      if (ghi::is_compressed_format(impl->get_format_enum()))
+      {
+        u32 mipW = impl->get_extent().width;
+        u32 mipH = impl->get_extent().height;
+        u32 blockSize = ghi::get_compressed_format_block_size(impl->get_format_enum());
+
+        for (u32 m = 0; m < impl->get_mip_level_count(); m++)
+        {
+          u32 blocksX = (mipW + 3) / 4;
+          u32 blocksY = (mipH + 3) / 4;
+          currentTextureSize += blocksX * blocksY * blockSize;
+
+          mipW = std::max(1u, mipW / 2);
+          mipH = std::max(1u, mipH / 2);
+        }
+        currentTextureSize *= impl->get_layer_count();
+
+        generate_mip_maps = false;
+      }
+      else
+      {
+        currentTextureSize = impl->get_extent().width * impl->get_extent().height * impl->get_extent().depth *
+                             ghi::get_format_byte_size(impl->get_format_enum()) * impl->get_layer_count();
+      }
+
+      textureByteSizes[i] = currentTextureSize;
+      totalSize += currentTextureSize;
+    }
+
+    VkBuffer stagingBuffer;
+    VmaAllocation stagingAlloc;
+    VmaAllocationInfo stagingAllocInfo;
+
+    VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    bufferInfo.size = totalSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    VK_CALL(
+        vmaCreateBuffer(dev->m_allocator, &bufferInfo, &allocInfo, &stagingBuffer, &stagingAlloc, &stagingAllocInfo),
+        "create staging buffer for texture upload");
+
+    const auto dataDst = static_cast<u8 *>(stagingAllocInfo.pMappedData);
+    for (u32 i = 0; i < count; i++)
+    {
+      auto impl = reinterpret_cast<VulkanImage *>(handles[i]);
+      if (!impl || !image_data[i])
+        continue;
+
+      memcpy(dataDst + offsets[i], image_data[i], textureByteSizes[i]);
+    }
+    vmaFlushAllocation(dev->m_allocator, stagingAlloc, 0, VK_WHOLE_SIZE);
+
+    AU_TRY_DISCARD(dev->execute_single_time_commands([&](VkCommandBuffer cmd) {
+      for (u32 i = 0; i < count; i++)
+      {
+        auto impl = reinterpret_cast<VulkanImage *>(handles[i]);
+        if (!impl || !image_data[i])
+          continue;
+
+        if (ghi::is_compressed_format(impl->get_format_enum()))
+        {
+          VkImageSubresourceRange range = {};
+          range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          range.baseMipLevel = 0;
+          range.levelCount = impl->get_mip_level_count();
+          range.baseArrayLayer = 0;
+          range.layerCount = impl->get_layer_count();
+
+          insert_image_barrier(cmd, impl->get_handle(), 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                               VK_PIPELINE_STAGE_TRANSFER_BIT, range);
+
+          std::vector<VkBufferImageCopy> regions;
+          u32 currentBufferOffset = 0;
+          u32 mipW = impl->get_extent().width;
+          u32 mipH = impl->get_extent().height;
+          u32 blockSize = ghi::get_compressed_format_block_size(impl->get_format_enum());
+
+          for (u32 layer = 0; layer < impl->get_layer_count(); layer++)
+          {
+            for (u32 m = 0; m < impl->get_mip_level_count(); m++)
+            {
+              VkBufferImageCopy region = {};
+              region.bufferOffset = offsets[i] + currentBufferOffset;
+              region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+              region.imageSubresource.mipLevel = m;
+              region.imageSubresource.baseArrayLayer = layer;
+              region.imageSubresource.layerCount = 1;
+              region.imageExtent = {mipW, mipH, 1};
+
+              regions.push_back(region);
+
+              u32 blocksX = (mipW + 3) / 4;
+              u32 blocksY = (mipH + 3) / 4;
+              u32 mipSize = blocksX * blocksY * blockSize;
+              currentBufferOffset += mipSize;
+
+              mipW = std::max(1u, mipW / 2);
+              mipH = std::max(1u, mipH / 2);
+            }
+            mipW = impl->get_extent().width;
+            mipH = impl->get_extent().height;
+          }
+
+          vkCmdCopyBufferToImage(cmd, stagingBuffer, impl->get_handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                 static_cast<u32>(regions.size()), regions.data());
+
+          insert_image_barrier(cmd, impl->get_handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                               VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, range);
+        }
+        else
+        {
+          VkImageSubresourceRange range = {};
+          range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          range.baseMipLevel = 0;
+          range.levelCount = impl->get_mip_level_count();
+          range.baseArrayLayer = 0;
+          range.layerCount = impl->get_layer_count();
+
+          insert_image_barrier(cmd, impl->get_handle(), 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                               VK_PIPELINE_STAGE_TRANSFER_BIT, range);
+
+          VkBufferImageCopy region = {};
+          region.bufferOffset = offsets[i];
+          region.bufferRowLength = 0;
+          region.bufferImageHeight = 0;
+          region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          region.imageSubresource.mipLevel = 0;
+          region.imageSubresource.baseArrayLayer = 0;
+          region.imageSubresource.layerCount = impl->get_layer_count();
+          region.imageOffset = {0, 0, 0};
+          region.imageExtent = impl->get_extent();
+
+          vkCmdCopyBufferToImage(cmd, stagingBuffer, impl->get_handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                 &region);
+
+          if (generate_mip_maps && impl->get_mip_level_count() > 1)
+          {
+            int32_t mipWidth = impl->get_extent().width;
+            int32_t mipHeight = impl->get_extent().height;
+
+            for (u32 j = 1; j < impl->get_mip_level_count(); j++)
+            {
+              VkImageSubresourceRange mipSubRange = {};
+              mipSubRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+              mipSubRange.baseMipLevel = j - 1;
+              mipSubRange.levelCount = 1;
+              mipSubRange.baseArrayLayer = 0;
+              mipSubRange.layerCount = impl->get_layer_count();
+
+              insert_image_barrier(cmd, impl->get_handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, mipSubRange);
+
+              VkImageBlit blit = {};
+              blit.srcOffsets[0] = {0, 0, 0};
+              blit.srcOffsets[1] = {mipWidth, mipHeight, 1};
+              blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+              blit.srcSubresource.mipLevel = j - 1;
+              blit.srcSubresource.baseArrayLayer = 0;
+              blit.srcSubresource.layerCount = impl->get_layer_count();
+
+              blit.dstOffsets[0] = {0, 0, 0};
+              blit.dstOffsets[1] = {mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1};
+              blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+              blit.dstSubresource.mipLevel = j;
+              blit.dstSubresource.baseArrayLayer = 0;
+              blit.dstSubresource.layerCount = impl->get_layer_count();
+
+              vkCmdBlitImage(cmd, impl->get_handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, impl->get_handle(),
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+
+              insert_image_barrier(cmd, impl->get_handle(), VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, mipSubRange);
+
+              if (mipWidth > 1)
+                mipWidth /= 2;
+              if (mipHeight > 1)
+                mipHeight /= 2;
+            }
+
+            VkImageSubresourceRange lastMipRange = {};
+            lastMipRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            lastMipRange.baseMipLevel = impl->get_mip_level_count() - 1;
+            lastMipRange.levelCount = 1;
+            lastMipRange.baseArrayLayer = 0;
+            lastMipRange.layerCount = impl->get_layer_count();
+
+            insert_image_barrier(cmd, impl->get_handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, lastMipRange);
+          }
+          else
+            insert_image_barrier(cmd, impl->get_handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, range);
+        }
+      }
+    }));
+
+    vmaDestroyBuffer(dev->m_allocator, stagingBuffer, stagingAlloc);
+
+    return {};
+  }
+
+  auto VulkanBackend::create_samplers(Device device, u32 count, const SamplerDesc *descs, Sampler *out_handles)
+      -> Result<void>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      const auto &desc = descs[i];
+
+      VkSamplerCreateInfo info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+
+      VkFilter filter = desc.linear_filter ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+      VkSamplerAddressMode address =
+          desc.repeat_uv ? VK_SAMPLER_ADDRESS_MODE_REPEAT : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+      info.magFilter = filter;
+      info.minFilter = filter;
+      info.mipmapMode = desc.linear_filter ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+      info.addressModeU = address;
+      info.addressModeV = address;
+      info.addressModeW = address;
+      info.mipLodBias = 0.0f;
+      info.anisotropyEnable = VK_FALSE;
+      info.maxAnisotropy = 16.0f;
+      info.minLod = 0.0f;
+      info.maxLod = VK_LOD_CLAMP_NONE;
+      info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+
+      VkSampler samplerHandle;
+      VK_CALL(vkCreateSampler(dev->get_handle(), &info, nullptr, &samplerHandle), "failed to create sampler");
+
+      out_handles[i] = reinterpret_cast<Sampler>(samplerHandle);
+    }
+
+    return {};
+  }
+
+  auto VulkanBackend::destroy_samplers(Device device, u32 count, Sampler *handles) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      if (!handles[i])
+        continue;
+
+      const auto impl = reinterpret_cast<VkSampler>(handles[i]);
+
+      vkDestroySampler(dev->get_handle(), impl, nullptr);
+
+      handles[i] = nullptr;
+    }
+  }
+
+  auto VulkanBackend::create_binding_layout(Device device, Span<const BindingLayoutEntry> entries)
+      -> Result<BindingLayout>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto layout = AU_TRY(VulkanBindingLayout::create(*dev, entries));
+    return reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout)));
+  }
+
+  auto VulkanBackend::destroy_binding_layout(Device device, BindingLayout layout) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
+    layout_impl->destroy(*dev);
+    delete layout_impl;
+  }
+
+  auto VulkanBackend::create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count,
+                                               DescriptorTable *out_tables) -> Result<void>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
+      const auto table = AU_TRY(VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl));
+      out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table)));
+    }
+
+    return {};
+  }
+
+  auto VulkanBackend::update_descriptor_tables(Device device, u32 count, const DescriptorUpdate *updates) -> void
+  {
+    auto &logger = auxid::get_thread_logger();
+
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      const auto &update = updates[i];
+      auto table_impl = reinterpret_cast<VulkanDescriptorTable *>(update.table);
+
+      const auto target_type = table_impl->layout->binding_types.find(update.binding);
+
+      if (!target_type)
+      {
+        logger.error("UpdateDescriptorTables: Binding %d not found in layout", update.binding);
+        continue;
+      }
+
+      VkWriteDescriptorSet write{};
+      write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      write.dstBinding = update.binding;
+      write.dstArrayElement = update.array_element;
+      write.descriptorCount = 1;
+      write.descriptorType = *target_type;
+
+      VkDescriptorBufferInfo buffer_info{};
+      VkDescriptorImageInfo image_info{};
+
+      if (update.buffer)
+      {
+        write.pBufferInfo = &buffer_info;
+
+        const auto buffer_impl = reinterpret_cast<VulkanBuffer *>(update.buffer);
+
+        assert(!buffer_impl->is_dynamic() || (update.buffer_offset == 0 && update.buffer_range == 0));
+
+        buffer_info.buffer = buffer_impl->get_handle();
+        if (buffer_impl->is_dynamic())
+        {
+          if (update.update_all_frames)
+          {
+            assert(table_impl->handle_count == buffer_impl->get_unit_count());
+
+            for (u32 f = 0; f < table_impl->handle_count; f++)
+            {
+              buffer_info.offset = 0;
+              buffer_info.range = buffer_impl->get_unit_size();
+              write.dstSet = table_impl->handles[f];
+              vkUpdateDescriptorSets(dev->get_handle(), 1, &write, 0, nullptr);
+            }
+            continue;
+          }
+          else
+          {
+            buffer_info.offset = 0;
+            buffer_info.range = buffer_impl->get_unit_size();
+          }
+        }
+        else
+        {
+          buffer_info.offset = update.buffer_offset;
+          buffer_info.range = (update.buffer_range == 0) ? VK_WHOLE_SIZE : update.buffer_range;
+        }
+      }
+      else if (update.image)
+      {
+        write.pImageInfo = &image_info;
+      }
+
+      const auto start_frame_index = update.update_all_frames ? 0 : update.update_frame_index;
+      const auto end_frame_index = update.update_all_frames ? table_impl->handle_count : update.update_frame_index + 1;
+      for (u32 f = start_frame_index; f < end_frame_index; f++)
+      {
+        write.dstSet = table_impl->handles[f];
+        vkUpdateDescriptorSets(dev->get_handle(), 1, &write, 0, nullptr);
+      }
+    }
+  }
+
+  auto VulkanBackend::create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage)
+      -> Result<Shader>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto shader =
+        AU_TRY(VulkanShaderModule::create(*dev, Span(static_cast<const u32 *>(spirv_code), size >> 2),
+                                          static_cast<VkShaderStageFlagBits>(map_shader_stage_enum_to_vk(stage))));
+    return reinterpret_cast<Shader>(new VulkanShaderModule(std::move(shader)));
+  }
+
+  auto VulkanBackend::destroy_shader(Device device, Shader shader) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto shader_impl = reinterpret_cast<VulkanShaderModule *>(shader);
+    shader_impl->destroy(*dev);
+    delete shader_impl;
+  }
+
+  auto VulkanBackend::create_graphics_pipeline(Device device, const GraphicsPipelineDesc *desc) -> Result<Pipeline>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto pipeline = AU_TRY(VulkanGraphicsPipeline::create(*dev, *desc));
+    return reinterpret_cast<Pipeline>(new VulkanGraphicsPipeline(std::move(pipeline)));
+  }
+
+  auto VulkanBackend::destroy_pipeline(Device device, Pipeline pipeline) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto pipeline_impl = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    pipeline_impl->destroy(*dev);
+    delete pipeline_impl;
+  }
+} // namespace ghi
+
+namespace ghi
+{
+  auto VulkanBackend::cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset,
+                                      u64 dst_offset) -> void
+  {
+    const auto src_buf = reinterpret_cast<VulkanBuffer *>(src);
+    const auto dst_buf = reinterpret_cast<VulkanBuffer *>(dst);
+
+    auto &dev = src_buf->get_device();
+
+    const auto &src_data =
+        src_buf->get_data((src_buf->get_data_count() > 1) ? dev.get_swapchain().get_current_frame_index() : 0);
+    const auto &dst_data =
+        dst_buf->get_data((dst_buf->get_data_count() > 1) ? dev.get_swapchain().get_current_frame_index() : 0);
+
+    const VkBufferCopy copy_region{
+        .srcOffset = src_offset,
+        .dstOffset = dst_offset,
+        .size = size,
+    };
+
+    vkCmdCopyBuffer(reinterpret_cast<VkCommandBuffer>(cmd), src_data.handle, dst_data.handle, 1, &copy_region);
+  }
+
+  auto VulkanBackend::cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, u32 count, const Buffer *buffers,
+                                              const u64 *offsets) -> void
+  {
+    Vec<VkBuffer> vk_buffers(count);
+    Vec<VkDeviceSize> vk_offsets(count);
+
+    for (u32 i = 0; i < count; ++i)
+    {
+      auto *impl = reinterpret_cast<VulkanBuffer *>(buffers[i]);
+      assert(impl->m_data_count == 1);
+      vk_buffers[i] = impl->get_data(0).handle;
+      vk_offsets[i] = offsets ? offsets[i] : 0;
+    }
+
+    vkCmdBindVertexBuffers(reinterpret_cast<VkCommandBuffer>(cmd), first_binding, count, vk_buffers.data(),
+                           vk_offsets.data());
+  }
+
+  auto VulkanBackend::cmd_bind_index_buffer(CommandBuffer cmd, Buffer buffer, u64 offset, bool use_32_bit_indices)
+      -> void
+  {
+    auto *impl = reinterpret_cast<VulkanBuffer *>(buffer);
+    assert(impl->m_data_count == 1);
+    const VkIndexType type = use_32_bit_indices ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+    vkCmdBindIndexBuffer(reinterpret_cast<VkCommandBuffer>(cmd), impl->get_data(0).handle, offset, type);
+  }
+
+  auto VulkanBackend::cmd_bind_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void
+  {
+    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    vkCmdBindPipeline(reinterpret_cast<VkCommandBuffer>(cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, p->get_handle());
+  }
+
+  auto VulkanBackend::cmd_push_constants(CommandBuffer cmd, Pipeline pipeline, u32 offset, u32 size, const void *data)
+      -> void
+  {
+    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    vkCmdPushConstants(reinterpret_cast<VkCommandBuffer>(cmd), p->get_layout(),
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, offset, size, data);
+  }
+
+  auto VulkanBackend::cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline,
+                                                DescriptorTable table) -> void
+  {
+    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    const auto *impl = reinterpret_cast<VulkanDescriptorTable *>(table);
+    vkCmdBindDescriptorSets(reinterpret_cast<VkCommandBuffer>(cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, p->get_layout(),
+                            set_index, 1, &impl->handles[p->get_device()->get_swapchain().get_current_frame_index()], 0,
+                            nullptr);
+  }
+
+  auto VulkanBackend::cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void
+  {
+    VkViewport viewport{};
+    viewport.x = x;
+    viewport.y = y;
+    viewport.width = w;
+    viewport.height = h;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    vkCmdSetViewport(reinterpret_cast<VkCommandBuffer>(cmd), 0, 1, &viewport);
+  }
+
+  auto VulkanBackend::cmd_set_scissor(CommandBuffer cmd, INT32 x, INT32 y, INT32 w, INT32 h) -> void
+  {
+    VkRect2D scissor{};
+    scissor.offset = {x, y};
+    scissor.extent = {(u32) std::max(0, w), (u32) std::max(0, h)};
+
+    vkCmdSetScissor(reinterpret_cast<VkCommandBuffer>(cmd), 0, 1, &scissor);
+  }
+
+  auto VulkanBackend::cmd_draw(CommandBuffer cmd, u32 vertex_count, u32 instance_count, u32 first_vertex,
+                               u32 first_instance) -> void
+  {
+    vkCmdDraw(reinterpret_cast<VkCommandBuffer>(cmd), vertex_count, instance_count, first_vertex, first_instance);
+  }
+
+  auto VulkanBackend::cmd_draw_indexed(CommandBuffer cmd, u32 index_count, u32 instance_count, u32 first_index,
+                                       u32 first_vertex, u32 first_instance) -> void
+  {
+    vkCmdDrawIndexed(reinterpret_cast<VkCommandBuffer>(cmd), index_count, instance_count, first_index,
+                     (INT32) first_vertex, first_instance);
+  }
+
+  auto VulkanBackend::cmd_draw_indexed_indirect(CommandBuffer cmd, Buffer indirect_buffer, u64 offset, u32 draw_count,
+                                                u32 stride) -> void
+  {
+    if (!indirect_buffer)
+      return;
+
+    auto *impl = reinterpret_cast<VulkanBuffer *>(indirect_buffer);
+    assert(impl->m_data_count == 1);
+    vkCmdDrawIndexedIndirect(reinterpret_cast<VkCommandBuffer>(cmd), impl->get_data(0).handle, offset, draw_count,
+                             stride);
+  }
+
+  auto VulkanBackend::cmd_pipeline_barrier(CommandBuffer cmd, u32 buffer_barrier_count,
+                                           const BufferBarrier *buffer_barriers, u32 texture_barrier_count,
+                                           const ImageBarrier *texture_barriers) -> void
+  {
+    struct VulkanResourceStateInfo
+    {
+      VkPipelineStageFlags2 stage;
+      VkAccessFlags2 access;
+      VkImageLayout layout;
+    };
+
+    auto GetStateInfo = [](EResourceState state) -> VulkanResourceStateInfo {
+      switch (state)
+      {
+      case EResourceState::Undefined:
+        return {VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED};
+
+      case EResourceState::GeneralRead:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+
+      case EResourceState::GeneralWrite:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL};
+
+      case EResourceState::ColorTarget:
+        return {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+
+      case EResourceState::DepthTarget:
+        return {VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+      case EResourceState::Present:
+        return {VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+
+      default:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                VK_IMAGE_LAYOUT_GENERAL};
+      }
+    };
+
+    Vec<VkImageMemoryBarrier2> images;
+    Vec<VkBufferMemoryBarrier2> buffers;
+    images.reserve(texture_barrier_count);
+    buffers.reserve(buffer_barrier_count);
+
+    for (u32 i = 0; i < buffer_barrier_count; i++)
+    {
+      const auto &desc = buffer_barriers[i];
+      auto *impl = reinterpret_cast<VulkanBuffer *>(desc.buffer);
+      auto &data = impl->get_data(
+          impl->get_data_count() == 1 ? impl->get_device().get_swapchain().get_current_frame_index() : 0);
+
+      const auto src_info = GetStateInfo(desc.old_state);
+      const auto dst_info = GetStateInfo(desc.new_state);
+
+      VkBufferMemoryBarrier2 barrier = {
+          .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+          .srcStageMask = src_info.stage,
+          .srcAccessMask = src_info.access,
+          .dstStageMask = dst_info.stage,
+          .dstAccessMask = dst_info.access,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .buffer = data.handle,
+          .offset = 0,
+          .size = impl->m_size,
+      };
+
+      buffers.push_back(barrier);
+    }
+
+    for (u32 i = 0; i < texture_barrier_count; i++)
+    {
+      const auto &desc = texture_barriers[i];
+      const auto *impl = reinterpret_cast<VulkanImage *>(desc.image);
+
+      const auto src_info = GetStateInfo(desc.old_state);
+      const auto dst_info = GetStateInfo(desc.new_state);
+
+      VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
+      if (is_vk_depth_format(impl->get_format()))
+        aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+      VkImageMemoryBarrier2 barrier = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+          .srcStageMask = src_info.stage,
+          .srcAccessMask = src_info.access,
+          .dstStageMask = dst_info.stage,
+          .dstAccessMask = dst_info.access,
+          .oldLayout = src_info.layout,
+          .newLayout = dst_info.layout,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+          .image = impl->get_handle(),
+          .subresourceRange =
+              {
+                  .aspectMask = aspect_mask,
+                  .baseMipLevel = 0,
+                  .levelCount = VK_REMAINING_MIP_LEVELS,
+                  .baseArrayLayer = 0,
+                  .layerCount = VK_REMAINING_ARRAY_LAYERS,
+              },
+      };
+
+      images.push_back(barrier);
+    }
+
+    const VkDependencyInfo dep_info = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .bufferMemoryBarrierCount = static_cast<u32>(buffers.size()),
+        .pBufferMemoryBarriers = buffers.data(),
+        .imageMemoryBarrierCount = static_cast<u32>(images.size()),
+        .pImageMemoryBarriers = images.data(),
+    };
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep_info);
+  }
+} // namespace ghi

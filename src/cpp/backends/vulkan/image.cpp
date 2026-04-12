@@ -76,4 +76,26 @@ namespace ghi
     vmaDestroyImage(allocator, m_handle, m_allocation);
     m_handle = VK_NULL_HANDLE;
   }
+
+  auto VulkanBackend::create_images(Device device, Span<const ImageDesc> descs, Image *out_handles) -> Result<void>
+  {
+  }
+
+  auto VulkanBackend::destroy_images(Device device, Span<const Image> handles) -> void
+  {
+  }
+
+  auto VulkanBackend::upload_image_data(Device device, Span<const Image> handles, Span<const u8 *const> image_data,
+                                        bool generate_mip_maps) -> Result<void>
+  {
+  }
+
+  auto VulkanBackend::create_samplers(Device device, Span<const SamplerDesc> descs, Sampler *out_handles)
+      -> Result<void>
+  {
+  }
+
+  auto VulkanBackend::destroy_samplers(Device device, Span<const Sampler> handles) -> void
+  {
+  }
 } // namespace ghi

@@ -53,10 +53,11 @@ namespace ghi
 
   struct VulkanDescriptorTable
   {
+    u32 handle_count{0};
     VkDescriptorSet handles[NUM_FRAMES_BUFFERED]{};
     VulkanBindingLayout *layout{nullptr};
 
-    static auto create(VulkanDevice& device, VulkanBindingLayout* layout) -> Result<VulkanDescriptorTable>;
+    static auto create(VulkanDevice& device, bool is_dynamic, VulkanBindingLayout* layout) -> Result<VulkanDescriptorTable>;
     auto destroy(VulkanDevice& device) -> void;
   };
 

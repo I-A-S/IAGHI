@@ -164,9 +164,11 @@ namespace ghi
     vkDestroyPipelineLayout(device.get_handle(), handle, nullptr);
   }
 
-  auto VulkanDescriptorTable::create(VulkanDevice &device, VulkanBindingLayout *layout) -> Result<VulkanDescriptorTable>
+  auto VulkanDescriptorTable::create(VulkanDevice &device, bool is_dynamic, VulkanBindingLayout *layout) -> Result<VulkanDescriptorTable>
   {
     VulkanDescriptorTable result;
+
+    result.handle_count = is_dynamic ? device.get_swapchain().get_backbuffer_image_count() : 1;
 
     VkDescriptorSetLayout layouts[NUM_FRAMES_BUFFERED] = {};
     for (u32 i = 0; i < NUM_FRAMES_BUFFERED; ++i)
@@ -175,7 +177,7 @@ namespace ghi
     VkDescriptorSetAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorPool = device.get_descriptor_pool();
-    alloc_info.descriptorSetCount = device.get_swapchain().get_backbuffer_image_count();
+    alloc_info.descriptorSetCount = result.handle_count;
     alloc_info.pSetLayouts = layouts;
 
     VK_CALL(vkAllocateDescriptorSets(device.get_handle(), &alloc_info, result.handles), "allocating descriptor set");
@@ -188,7 +190,7 @@ namespace ghi
   auto VulkanDescriptorTable::destroy(VulkanDevice &device) -> void
   {
     vkFreeDescriptorSets(device.get_handle(), device.get_descriptor_pool(),
-                         device.get_swapchain().get_backbuffer_image_count(), handles);
+                         handle_count, handles);
   }
 
   auto VulkanGraphicsPipeline::create(VulkanDevice &device, const GraphicsPipelineDesc &desc)
@@ -308,5 +310,40 @@ namespace ghi
   {
     vkDestroyPipeline(device.get_handle(), m_handle, nullptr);
     m_layout.destroy(device);
+  }
+
+  auto VulkanBackend::create_binding_layout(Device device, Span<const BindingLayoutEntry> entries)
+      -> Result<BindingLayout>
+  {
+  }
+
+  auto VulkanBackend::destroy_binding_layout(Device device, BindingLayout layout) -> void
+  {
+  }
+
+  auto VulkanBackend::create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count,
+                                               DescriptorTable *out_tables) -> Result<void>
+  {
+  }
+
+  auto VulkanBackend::update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void
+  {
+  }
+
+  auto VulkanBackend::create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage)
+      -> Result<Shader>
+  {
+  }
+
+  auto VulkanBackend::destroy_shader(Device device, Shader shader) -> void
+  {
+  }
+
+  auto VulkanBackend::create_graphics_pipeline(Device device, const GraphicsPipelineDesc &desc) -> Result<Pipeline>
+  {
+  }
+
+  auto VulkanBackend::destroy_pipeline(Device device, Pipeline pipeline) -> void
+  {
   }
 } // namespace ghi

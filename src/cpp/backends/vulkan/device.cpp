@@ -131,7 +131,9 @@ namespace ghi
     if (!result.m_surface)
       return fail("failed to create vulkan surface");
 
-    result.m_physical_device = AU_TRY(result.select_physical_device());
+    const auto [pd, props] = AU_TRY(result.select_physical_device());
+    result.m_physical_device = pd;
+    result.m_physical_device_properties = props;
 
     Vec<VkDeviceQueueCreateInfo> device_queue_create_infos;
 
@@ -210,10 +212,10 @@ namespace ghi
     };
 
     VkPhysicalDeviceVulkan12Features enable_vulkan12_features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-      .pNext = &enable_vulkan13_features,
-      .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
-      .runtimeDescriptorArray = VK_TRUE,
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext = &enable_vulkan13_features,
+        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+        .runtimeDescriptorArray = VK_TRUE,
     };
 
     VkPhysicalDeviceFeatures2 enable_device_features2{
@@ -405,7 +407,7 @@ namespace ghi
     return {};
   }
 
-  auto VulkanDevice::select_physical_device() -> Result<VkPhysicalDevice>
+  auto VulkanDevice::select_physical_device() -> Result<Pair<VkPhysicalDevice, VkPhysicalDeviceProperties>>
   {
     bool found = false;
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
@@ -449,7 +451,8 @@ namespace ghi
 
     logger.info("using the hardware device '%s'", props.deviceName);
 
-    return physical_device;
+    vkGetPhysicalDeviceProperties(physical_device, &props);
+    return Pair<VkPhysicalDevice, VkPhysicalDeviceProperties>{physical_device, props};
   }
 
   VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,

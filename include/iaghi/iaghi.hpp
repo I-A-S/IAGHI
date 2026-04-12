@@ -91,10 +91,20 @@ namespace ghi
   {
     Vertex = 0x1,
     Index = 0x2,
-    Uniform = 0x4,
-    Storage = 0x8,
-    Transfer = 0x10,
-    Indirect = 0x20
+
+    StaticUniform = 0x4,
+    StaticStorage = 0x8,
+
+    FrameBoundUniform = 0x10,
+    FrameBoundStorage = 0x20,
+
+    DynamicOffsetUniform = 0x40,
+    DynamicOffsetStorage = 0x80,
+
+    TransferSrc = 0x100,
+    TransferDst = 0x200,
+
+    Indirect = 0x400,
   };
 
   enum class EResourceState
@@ -111,6 +121,10 @@ namespace ghi
   {
     UniformBuffer,
     StorageBuffer,
+
+    DynamicUniformBuffer,
+    DynamicStorageBuffer,
+
     SampledImage,
     StorageImage,
     CombinedImageSampler,
@@ -222,12 +236,14 @@ namespace ghi
     u32 array_element;
 
     Buffer buffer;
-    u64 buffer_offset;
-    u64 buffer_range;
+    u64 buffer_offset{0};
+    u64 buffer_range{0};
 
     Image image;
     Sampler sampler;
-    bool image_update_all_frames{false};
+
+    u32 update_frame_index{0};
+    bool update_all_frames{false};
   } DescriptorUpdate;
 
   typedef struct VertexInputBinding
@@ -306,38 +322,38 @@ namespace ghi
   // API
   // -----------------------------------------------------------------------------
 
-  auto create_device(const InitInfo &init_info) -> Result<Device>;
-  auto destroy_device(Device device) -> void;
-
-  auto create_buffers(Device device, u32 count, const BufferDesc *descs, Buffer *out_handles) -> Result<void>;
-  auto destroy_buffers(Device device, u32 count, const Buffer *handles) -> void;
-  auto upload_buffer_data(Device device, Buffer buffer, const void *data, u64 size, bool upload_to_all_frames = false) -> Result<void>;
-
-  auto create_images(Device device, u32 count, const ImageDesc *descs, Image *out_handles) -> Result<void>;
-  auto destroy_images(Device device, u32 count, Image *handles) -> void;
-  auto upload_image_data(Device device, u32 count, Image *handles, const u8 **image_data, bool generate_mip_maps)
-      -> Result<void>;
-
   auto is_depth_format(EFormat format) -> bool;
   auto is_compressed_format(EFormat format) -> bool;
   auto get_format_byte_size(EFormat format) -> u32;
   auto get_compressed_format_block_size(EFormat format) -> u32;
 
-  auto create_samplers(Device device, u32 count, const SamplerDesc *descs, Sampler *out_handles) -> Result<void>;
-  auto destroy_samplers(Device device, u32 count, Sampler *handles) -> void;
+  auto create_device(const InitInfo &init_info) -> Result<Device>;
+  auto destroy_device(Device device) -> void;
+
+  auto create_buffers(Device device, Span<const BufferDesc> descs, Buffer *out_handles) -> Result<void>;
+  auto destroy_buffers(Device device, Span<const Buffer> handles) -> void;
+  auto map_buffer(Device device, Buffer buffer) -> void*;
+  auto unmap_buffer(Device device, Buffer buffer) -> void;
+
+  auto create_images(Device device, Span<const ImageDesc> descs, Image *out_handles) -> Result<void>;
+  auto destroy_images(Device device, Span<const Image> handles) -> void;
+  auto upload_image_data(Device device, Span<const Image> handles, Span<const u8 * const> image_data, bool generate_mip_maps)
+      -> Result<void>;
+
+  auto create_samplers(Device device, Span<const SamplerDesc> descs, Sampler *out_handles) -> Result<void>;
+  auto destroy_samplers(Device device, Span<const Sampler> handles) -> void;
 
   auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>;
   auto destroy_binding_layout(Device device, BindingLayout layout) -> void;
 
-  auto create_descriptor_tables(Device device, BindingLayout layout, u32 count, DescriptorTable *out_tables)
+  auto create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count, DescriptorTable *out_tables)
       -> Result<void>;
-  auto update_descriptor_tables(Device device, u32 count, const DescriptorUpdate *updates) -> void;
+  auto update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void;
 
   auto create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage) -> Result<Shader>;
   auto destroy_shader(Device device, Shader shader) -> void;
 
-  // [IATODO] auto create_compute_pipeline(Device device, const ComputePipelineDesc *desc) -> Pipeline;
-  auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc *desc) -> Result<Pipeline>;
+  auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc& desc) -> Result<Pipeline>;
   auto destroy_pipeline(Device device, Pipeline pipeline) -> void;
 
   auto resize_swapchain(Device device, u32 width, u32 height) -> Result<void>;
@@ -348,7 +364,7 @@ namespace ghi
   auto end_frame(Device device) -> void;
 
   auto wait_idle(Device device) -> void;
-  auto set_clear_color(f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;
+  auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;
 
   auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)> &commands_callback)
       -> Result<void>;
@@ -356,27 +372,24 @@ namespace ghi
   auto cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset = 0, u64 dst_offset = 0)
       -> void;
 
-  auto cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, u32 count, const Buffer *buffers,
-                               const u64 *offsets) -> void;
+  auto cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, Span<const Buffer> buffers, Span<const u64> offsets) -> void;
   auto cmd_bind_index_buffer(CommandBuffer cmd, Buffer buffer, u64 offset, bool use_32_bit_indices) -> void;
 
   auto cmd_bind_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void;
 
   auto cmd_push_constants(CommandBuffer cmd, Pipeline pipeline, u32 offset, u32 size, const void *data) -> void;
-  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table) -> void;
+
+  auto cmd_bind_frame_bound_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table) -> void;
+  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table, Span<const u32> offsets) -> void;
 
   auto cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void;
-  auto cmd_set_scissor(CommandBuffer cmd, INT32 x, INT32 y, INT32 w, INT32 h) -> void;
+  auto cmd_set_scissor(CommandBuffer cmd, i32 x, i32 y, i32 w, i32 h) -> void;
 
   auto cmd_draw(CommandBuffer cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) -> void;
   auto cmd_draw_indexed(CommandBuffer cmd, u32 index_count, u32 instance_count, u32 first_index, u32 first_vertex,
                         u32 first_instance) -> void;
-
   auto cmd_draw_indexed_indirect(CommandBuffer cmd, Buffer indirect_buffer, u64 offset, u32 draw_count, u32 stride)
       -> void;
 
-  // [IATODO] auto cmd_dispatch(CommandBuffer cmd, u32 x, u32 y, u32 z) -> void;
-
-  auto cmd_pipeline_barrier(CommandBuffer cmd, u32 buffer_barrier_count, const BufferBarrier *buffer_barriers,
-                            u32 texture_barrier_count, const ImageBarrier *texture_barriers) -> void;
+  auto cmd_pipeline_barrier(CommandBuffer cmd, Span<const BufferBarrier> buffer_barriers, Span<const ImageBarrier> image_barriers) -> void;
 } // namespace ghi

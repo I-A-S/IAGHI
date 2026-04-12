@@ -24,46 +24,63 @@ namespace ghi
   class VulkanBuffer
   {
 public:
-    struct Data
-    {
-      VkBuffer handle{};
-      VmaAllocation allocation{};
-      VmaAllocationInfo alloc_info{};
-    };
-
-    explicit VulkanBuffer(VulkanDevice& device_ref) : m_device_ref(device_ref)
+    explicit VulkanBuffer(VulkanDevice &device_ref) : m_device_ref(device_ref)
     {
     }
 
-    static auto create(VulkanDevice& device, u64 size, VkBufferUsageFlags usage, bool host_visible,
+    static auto create(VulkanDevice &device, u64 size, VkBufferUsageFlags usage, bool is_dynamic, bool host_visible,
                        const char *debug_name = "<not_set>") -> Result<VulkanBuffer>;
 
     auto destroy() -> void;
 
-    auto get_data(u32 index) -> Data&
-    {
-      return m_data[index];
-    }
+    auto map() -> void *;
+    auto unmap() -> void;
+    auto flush(u64 offset = 0, u64 size = VK_WHOLE_SIZE) -> void;
 
-    [[nodiscard]] auto get_data_count() const -> u64
-    {
-      return m_data_count;
-    }
-
-    auto get_device() -> VulkanDevice&
+public:
+    auto get_device() -> VulkanDevice &
     {
       return m_device_ref;
     }
 
-private:
-    Data m_data[NUM_FRAMES_BUFFERED]; // [IATODO]: Memory inefficient yeah but for now this'll do
+    auto get_handle() const -> VkBuffer
+    {
+      return m_handle;
+    }
 
+    auto get_stride() -> u64
+    {
+      return m_stride;
+    }
+
+    auto is_dynamic() -> bool
+    {
+      return m_is_dynamic;
+    }
+
+    auto get_unit_size() -> u64
+    {
+      return m_unit_size;
+    }
+
+    auto get_size() -> u64
+    {
+      return m_size;
+    }
+
+    auto get_unit_count() -> u64
+    {
+      return m_size / m_unit_size;
+    }
+
+protected:
     u64 m_size{};
-    u32 m_data_count{};
-    VulkanDevice& m_device_ref;
-
-    friend class VulkanBackend;
-    friend class VulkanDeviceLocalBuffer;
-    friend class VulkanHostVisibleBuffer;
+    u64 m_stride{};
+    u64 m_unit_size{};
+    bool m_is_dynamic{};
+    VkBuffer m_handle{};
+    VulkanDevice &m_device_ref;
+    VmaAllocation m_allocation{};
+    VmaAllocationInfo m_alloc_info{};
   };
 } // namespace ghi

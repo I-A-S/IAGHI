@@ -19,216 +19,216 @@
 
 namespace ghi
 {
-  VulkanBackend backend{};
-
   auto create_device(const InitInfo &init_info) -> Result<Device>
   {
-    return backend.create_device(init_info);
+    return VulkanBackend::create_device(init_info);
   }
 
   auto destroy_device(Device device) -> void
   {
-    backend.destroy_device(device);
+    VulkanBackend::destroy_device(device);
+  }
+
+  auto create_buffers(Device device, Span<const BufferDesc> descs, Buffer *out_handles) -> Result<void>
+  {
+    return VulkanBackend::create_buffers(device, descs, out_handles);
+  }
+
+  auto destroy_buffers(Device device, Span<const Buffer> handles) -> void
+  {
+    VulkanBackend::destroy_buffers(device, handles);
+  }
+
+  auto map_buffer(Device device, Buffer buffer) -> void *
+  {
+    return VulkanBackend::map_buffer(device, buffer);
+  }
+
+  auto unmap_buffer(Device device, Buffer buffer) -> void
+  {
+    VulkanBackend::unmap_buffer(device, buffer);
+  }
+
+  auto create_images(Device device, Span<const ImageDesc> descs, Image *out_handles) -> Result<void>
+  {
+    return VulkanBackend::create_images(device, descs, out_handles);
+  }
+
+  auto destroy_images(Device device, Span<const Image> handles) -> void
+  {
+    VulkanBackend::destroy_images(device, handles);
+  }
+
+  auto upload_image_data(Device device, Span<const Image> handles, Span<const u8 *const> image_data,
+                         bool generate_mip_maps) -> Result<void>
+  {
+    return VulkanBackend::upload_image_data(device, handles, image_data, generate_mip_maps);
+  }
+
+  auto create_samplers(Device device, Span<const SamplerDesc> descs, Sampler *out_handles) -> Result<void>
+  {
+    return VulkanBackend::create_samplers(device, descs, out_handles);
+  }
+
+  auto destroy_samplers(Device device, Span<const Sampler> handles) -> void
+  {
+    VulkanBackend::destroy_samplers(device, handles);
+  }
+
+  auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>
+  {
+    return VulkanBackend::create_binding_layout(device, entries);
+  }
+
+  auto destroy_binding_layout(Device device, BindingLayout layout) -> void
+  {
+    VulkanBackend::destroy_binding_layout(device, layout);
+  }
+
+  auto create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count,
+                                DescriptorTable *out_tables) -> Result<void>
+  {
+    return VulkanBackend::create_descriptor_tables(device, layout, is_frame_bound, count, out_tables);
+  }
+
+  auto update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void
+  {
+    VulkanBackend::update_descriptor_tables(device, updates);
+  }
+
+  auto create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage) -> Result<Shader>
+  {
+    return VulkanBackend::create_shader(device, spirv_code, size, stage);
+  }
+
+  auto destroy_shader(Device device, Shader shader) -> void
+  {
+    VulkanBackend::destroy_shader(device, shader);
+  }
+
+  auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc &desc) -> Result<Pipeline>
+  {
+    return VulkanBackend::create_graphics_pipeline(device, desc);
+  }
+
+  auto destroy_pipeline(Device device, Pipeline pipeline) -> void
+  {
+    VulkanBackend::destroy_pipeline(device, pipeline);
+  }
+
+  auto resize_swapchain(Device device, u32 width, u32 height) -> Result<void>
+  {
+    return VulkanBackend::resize_swapchain(device, width, height);
+  }
+
+  auto get_swapchain_format(Device device) -> EFormat
+  {
+    return VulkanBackend::get_swapchain_format(device);
+  }
+
+  auto get_swapchain_extent(Device device, u32 &width, u32 &height) -> void
+  {
+    VulkanBackend::get_swapchain_extent(device, width, height);
   }
 
   auto begin_frame(Device device) -> CommandBuffer
   {
-    return backend.begin_frame(device);
+    return VulkanBackend::begin_frame(device);
   }
 
   auto end_frame(Device device) -> void
   {
-    backend.end_frame(device);
+    VulkanBackend::end_frame(device);
   }
 
-  auto set_clear_color(f32 r, f32 g, f32 b, f32 a) -> void
+  auto wait_idle(Device device) -> void
   {
-    backend.set_clear_color(r, g, b, a);
+    VulkanBackend::wait_idle(device);
+  }
+
+  auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a) -> void
+  {
+    VulkanBackend::set_clear_color(device, r, g, b, a);
   }
 
   auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)> &commands_callback)
       -> Result<void>
   {
-    return backend.execute_single_time_commands(device, commands_callback);
-  }
-
-  auto cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset, u64 dst_offset) -> void
-  {
-    backend.cmd_copy_buffer(cmd, src, dst, size, src_offset, dst_offset);
-  }
-
-  auto wait_idle(Device device) -> void
-  {
-    backend.wait_idle(device);
-  }
-
-  auto create_buffers(Device device, u32 count, const BufferDesc *descs, Buffer *out_handles) -> Result<void>
-  {
-    return backend.create_buffers(device, count, descs, out_handles);
-  }
-
-  auto destroy_buffers(Device device, u32 count, const Buffer *handles) -> void
-  {
-    backend.destroy_buffers(device, count, handles);
-  }
-
-  auto upload_buffer_data(Device device, Buffer buffer, const void *data, u64 size, bool upload_to_all_frames) -> Result<void>
-  {
-    return backend.upload_buffer_data(device, buffer, data, size, upload_to_all_frames);
-  }
-
-  auto create_images(Device device, u32 count, const ImageDesc *descs, Image *out_handles) -> Result<void>
-  {
-    return backend.create_images(device, count, descs, out_handles);
-  }
-
-  auto destroy_images(Device device, u32 count, Image *handles) -> void
-  {
-    backend.destroy_images(device, count, handles);
-  }
-
-  auto upload_image_data(Device device, u32 count, Image *handles, const u8 **image_data, bool generate_mip_maps)
-      -> Result<void>
-  {
-    return backend.upload_image_data(device, count, handles, image_data, generate_mip_maps);
-  }
-
-  auto create_samplers(Device device, u32 count, const SamplerDesc *descs, Sampler *out_handles) -> Result<void>
-  {
-    return backend.create_samplers(device, count, descs, out_handles);
-  }
-
-  auto destroy_samplers(Device device, u32 count, Sampler *handles) -> void
-  {
-    backend.destroy_samplers(device, count, handles);
-  }
-
-  auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>
-  {
-    return backend.create_binding_layout(device, entries);
-  }
-
-  auto destroy_binding_layout(Device device, BindingLayout layout) -> void
-  {
-    backend.destroy_binding_layout(device, layout);
-  }
-
-  auto create_descriptor_tables(Device device, BindingLayout layout, u32 count, DescriptorTable *out_tables)
-      -> Result<void>
-  {
-    return backend.create_descriptor_tables(device, layout, count, out_tables);
-  }
-
-  auto update_descriptor_tables(Device device, u32 count, const DescriptorUpdate *updates) -> void
-  {
-    backend.update_descriptor_tables(device, count, updates);
-  }
-
-  auto create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage) -> Result<Shader>
-  {
-    return backend.create_shader(device, spirv_code, size, stage);
-  }
-
-  auto destroy_shader(Device device, Shader shader) -> void
-  {
-    backend.destroy_shader(device, shader);
-  }
-
-  // auto create_compute_pipeline(Device device, const ComputePipelineDesc *desc) -> Pipeline
-  // {
-  //   return backend.create_compute_pipeline(device, desc);
-  // }
-
-  auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc *desc) -> Result<Pipeline>
-  {
-    return backend.create_graphics_pipeline(device, desc);
-  }
-
-  auto destroy_pipeline(Device device, Pipeline pipeline) -> void
-  {
-    backend.destroy_pipeline(device, pipeline);
-  }
-
-  auto resize_swapchain(Device device, u32 width, u32 height) -> Result<void>
-  {
-    return backend.resize_swapchain(device, width, height);
-  }
-
-  auto get_swapchain_format(Device device) -> EFormat
-  {
-    return backend.get_swapchain_format(device);
-  }
-
-  auto get_swapchain_extent(Device device, u32 &width, u32 &height) -> void
-  {
-    backend.get_swapchain_extent(device, width, height);
+    return VulkanBackend::execute_single_time_commands(device, commands_callback);
   }
 } // namespace ghi
 
 namespace ghi
 {
-  auto cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, u32 count, const Buffer *buffers,
-                               const u64 *offsets) -> void
+  auto cmd_copy_buffer(CommandBuffer cmd, Buffer src, Buffer dst, u64 size, u64 src_offset, u64 dst_offset) -> void
   {
-    backend.cmd_bind_vertex_buffers(cmd, first_binding, count, buffers, offsets);
+    VulkanBackend::cmd_copy_buffer(cmd, src, dst, size, src_offset, dst_offset);
+  }
+
+  auto cmd_bind_vertex_buffers(CommandBuffer cmd, u32 first_binding, Span<const Buffer> buffers,
+                               Span<const u64> offsets) -> void
+  {
+    VulkanBackend::cmd_bind_vertex_buffers(cmd, first_binding, buffers, offsets);
   }
 
   auto cmd_bind_index_buffer(CommandBuffer cmd, Buffer buffer, u64 offset, bool use_32_bit_indices) -> void
   {
-    backend.cmd_bind_index_buffer(cmd, buffer, offset, use_32_bit_indices);
+    VulkanBackend::cmd_bind_index_buffer(cmd, buffer, offset, use_32_bit_indices);
   }
 
   auto cmd_bind_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void
   {
-    backend.cmd_bind_pipeline(cmd, pipeline);
+    VulkanBackend::cmd_bind_pipeline(cmd, pipeline);
   }
 
   auto cmd_push_constants(CommandBuffer cmd, Pipeline pipeline, u32 offset, u32 size, const void *data) -> void
   {
-    backend.cmd_push_constants(cmd, pipeline, offset, size, data);
+    VulkanBackend::cmd_push_constants(cmd, pipeline, offset, size, data);
   }
 
-  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table) -> void
+  auto cmd_bind_frame_bound_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table)
+      -> void
   {
-    backend.cmd_bind_descriptor_table(cmd, set_index, pipeline, table);
+    VulkanBackend::cmd_bind_frame_bound_descriptor_table(cmd, set_index, pipeline, table);
+  }
+
+  auto cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline, DescriptorTable table,
+                                 Span<const u32> offsets) -> void
+  {
+    VulkanBackend::cmd_bind_descriptor_table(cmd, set_index, pipeline, table, offsets);
   }
 
   auto cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void
   {
-    backend.cmd_set_viewport(cmd, x, y, w, h);
+    VulkanBackend::cmd_set_viewport(cmd, x, y, w, h);
   }
 
-  auto cmd_set_scissor(CommandBuffer cmd, INT32 x, INT32 y, INT32 w, INT32 h) -> void
+  auto cmd_set_scissor(CommandBuffer cmd, i32 x, i32 y, i32 w, i32 h) -> void
   {
-    backend.cmd_set_scissor(cmd, x, y, w, h);
+    VulkanBackend::cmd_set_scissor(cmd, x, y, w, h);
   }
 
   auto cmd_draw(CommandBuffer cmd, u32 vertex_count, u32 instance_count, u32 first_vertex, u32 first_instance) -> void
   {
-    backend.cmd_draw(cmd, vertex_count, instance_count, first_vertex, first_instance);
+    VulkanBackend::cmd_draw(cmd, vertex_count, instance_count, first_vertex, first_instance);
   }
 
   auto cmd_draw_indexed(CommandBuffer cmd, u32 index_count, u32 instance_count, u32 first_index, u32 first_vertex,
                         u32 first_instance) -> void
   {
-    backend.cmd_draw_indexed(cmd, index_count, instance_count, first_index, first_vertex, first_instance);
+    VulkanBackend::cmd_draw_indexed(cmd, index_count, instance_count, first_index, first_vertex, first_instance);
   }
 
   auto cmd_draw_indexed_indirect(CommandBuffer cmd, Buffer indirect_buffer, u64 offset, u32 draw_count, u32 stride)
       -> void
   {
-    backend.cmd_draw_indexed_indirect(cmd, indirect_buffer, offset, draw_count, stride);
+    VulkanBackend::cmd_draw_indexed_indirect(cmd, indirect_buffer, offset, draw_count, stride);
   }
 
-  // auto cmd_dispatch(CommandBuffer cmd, u32 x, u32 y, u32 z) -> void
-  // {
-  //   backend.cmd_dispatch(cmd, x, y, z);
-  // }
-
-  auto cmd_pipeline_barrier(CommandBuffer cmd, u32 buffer_barrier_count, const BufferBarrier *buffer_barriers,
-                            u32 texture_barrier_count, const ImageBarrier *texture_barriers) -> void
+  auto cmd_pipeline_barrier(CommandBuffer cmd, Span<const BufferBarrier> buffer_barriers,
+                            Span<const ImageBarrier> image_barriers) -> void
   {
-    backend.cmd_pipeline_barrier(cmd, buffer_barrier_count, buffer_barriers, texture_barrier_count, texture_barriers);
+    VulkanBackend::cmd_pipeline_barrier(cmd, buffer_barriers, image_barriers);
   }
 } // namespace ghi
 

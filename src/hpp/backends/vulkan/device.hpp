@@ -52,6 +52,26 @@ public:
       return m_allocator;
     }
 
+    auto get_min_uniform_buffer_offset_alignment() const -> u32
+    {
+      return m_physical_device_properties.limits.minUniformBufferOffsetAlignment;
+    }
+
+    auto get_min_storage_buffer_offset_alignment() const -> u32
+    {
+      return m_physical_device_properties.limits.minStorageBufferOffsetAlignment;
+    }
+
+    auto get_max_uniform_buffer_range() const -> u32
+    {
+      return m_physical_device_properties.limits.maxUniformBufferRange;
+    }
+
+    auto get_max_storage_buffer_range() const -> u32
+    {
+      return m_physical_device_properties.limits.maxStorageBufferRange;
+    }
+
 private:
     VkDevice m_handle{};
     VkInstance m_instance{};
@@ -79,8 +99,10 @@ private:
 
     VkDescriptorPool m_descriptor_pool{};
 
+    VkPhysicalDeviceProperties m_physical_device_properties{};
+
 private:
-    auto select_physical_device() -> Result<VkPhysicalDevice>;
+    auto select_physical_device() -> Result<Pair<VkPhysicalDevice, VkPhysicalDeviceProperties>>;
 
     friend class VulkanBackend;
     friend class VulkanSwapchain;
