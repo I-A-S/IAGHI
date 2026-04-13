@@ -16,6 +16,7 @@
 #include <backends/vulkan/pipeline.hpp>
 #include <backends/vulkan/backend.hpp>
 #include <backends/vulkan/device.hpp>
+#include <backends/vulkan/buffer.hpp>
 
 namespace ghi
 {
@@ -90,26 +91,15 @@ namespace ghi
 
     for (const auto &entry : entries)
     {
-      if (entry.is_push_constant)
-      {
-        result.push_constants.push_back(VkPushConstantRange{
-            .stageFlags = VulkanBackend::map_shader_stage_enum_to_vk(entry.visibility),
-            .offset = entry.pc_offset,
-            .size = entry.pc_size,
-        });
-      }
-      else
-      {
-        VkDescriptorSetLayoutBinding b{};
-        b.binding = entry.binding;
-        b.descriptorType = VulkanBackend::map_descriptor_type_enum_to_vk(entry.type);
-        b.descriptorCount = entry.count;
-        b.stageFlags = VulkanBackend::map_shader_stage_enum_to_vk(entry.visibility);
-        b.pImmutableSamplers = nullptr; // [IATODO] Support immutable samplers
-        bindings.push_back(b);
+      VkDescriptorSetLayoutBinding b{};
+      b.binding = entry.binding;
+      b.descriptorType = VulkanBackend::map_descriptor_type_enum_to_vk(entry.type);
+      b.descriptorCount = entry.count;
+      b.stageFlags = VulkanBackend::map_shader_stage_enum_to_vk(entry.visibility);
+      b.pImmutableSamplers = nullptr; // [IATODO] Support immutable samplers
+      bindings.push_back(b);
 
-        result.binding_types[entry.binding] = b.descriptorType;
-      }
+      result.binding_types[entry.binding] = b.descriptorType;
     }
 
     VkDescriptorSetLayoutCreateInfo layout_info{};
@@ -131,18 +121,15 @@ namespace ghi
     vkDestroyDescriptorSetLayout(device.get_handle(), handle, nullptr);
   }
 
-  auto VulkanPipelineLayout::create(VulkanDevice &device, Span<const VulkanBindingLayout *> bindings)
-      -> Result<VulkanPipelineLayout>
+  auto VulkanPipelineLayout::create(VulkanDevice &device, Span<const VulkanBindingLayout *> bindings,
+                                    Span<const VkPushConstantRange> push_constants) -> Result<VulkanPipelineLayout>
   {
     VulkanPipelineLayout result{};
 
-    Vec<VkPushConstantRange> push_constants;
     Vec<VkDescriptorSetLayout> descriptor_set_layouts;
     for (const auto &binding : bindings)
     {
       descriptor_set_layouts.push_back(binding->handle);
-      for (const auto &pc : binding->push_constants)
-        push_constants.push_back(pc);
     }
 
     const VkPipelineLayoutCreateInfo layout_create_info{
@@ -164,11 +151,12 @@ namespace ghi
     vkDestroyPipelineLayout(device.get_handle(), handle, nullptr);
   }
 
-  auto VulkanDescriptorTable::create(VulkanDevice &device, bool is_dynamic, VulkanBindingLayout *layout) -> Result<VulkanDescriptorTable>
+  auto VulkanDescriptorTable::create(VulkanDevice &device, bool is_frame_bound, VulkanBindingLayout *layout)
+      -> Result<VulkanDescriptorTable>
   {
     VulkanDescriptorTable result;
 
-    result.handle_count = is_dynamic ? device.get_swapchain().get_backbuffer_image_count() : 1;
+    result.handle_count = is_frame_bound ? device.get_swapchain().get_backbuffer_image_count() : 1;
 
     VkDescriptorSetLayout layouts[NUM_FRAMES_BUFFERED] = {};
     for (u32 i = 0; i < NUM_FRAMES_BUFFERED; ++i)
@@ -189,8 +177,7 @@ namespace ghi
 
   auto VulkanDescriptorTable::destroy(VulkanDevice &device) -> void
   {
-    vkFreeDescriptorSets(device.get_handle(), device.get_descriptor_pool(),
-                         handle_count, handles);
+    vkFreeDescriptorSets(device.get_handle(), device.get_descriptor_pool(), handle_count, handles);
   }
 
   auto VulkanGraphicsPipeline::create(VulkanDevice &device, const GraphicsPipelineDesc &desc)
@@ -200,12 +187,20 @@ namespace ghi
 
     result.m_device = &device;
 
+    Vec<VkPushConstantRange> push_constants;
+    for (const auto &pc : desc.push_constant_ranges)
+      push_constants.push_back({
+          .stageFlags = VulkanBackend::map_shader_stage_enum_to_vk(pc.stages),
+          .offset = pc.offset,
+          .size = pc.size,
+      });
+
     Vec<const VulkanBindingLayout *> bindings_layouts;
     for (u32 i = 0; i < desc.binding_layouts.size(); ++i)
     {
       bindings_layouts.push_back(reinterpret_cast<VulkanBindingLayout *>(desc.binding_layouts[i]));
     }
-    result.m_layout = AU_TRY(VulkanPipelineLayout::create(device, bindings_layouts));
+    result.m_layout = AU_TRY(VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
 
     const auto vertex_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.vertex_shader);
     const auto fragment_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.fragment_shader);
@@ -312,38 +307,162 @@ namespace ghi
     m_layout.destroy(device);
   }
 
-  auto VulkanBackend::create_binding_layout(Device device, Span<const BindingLayoutEntry> entries)
-      -> Result<BindingLayout>
+  auto VulkanBackend::create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets,
+                                             BindingLayout *out_layouts) -> Result<void>
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    u32 i{0};
+    for (const auto &entries : entry_sets)
+    {
+      const auto layout = AU_TRY(VulkanBindingLayout::create(*dev, entries));
+      out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout)));
+    }
+
+    return {};
   }
 
-  auto VulkanBackend::destroy_binding_layout(Device device, BindingLayout layout) -> void
+  auto VulkanBackend::destroy_binding_layouts(Device device, Span<const BindingLayout> layouts) -> void
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (auto layout : layouts)
+    {
+      const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
+      layout_impl->destroy(*dev);
+      delete layout_impl;
+    }
   }
 
-  auto VulkanBackend::create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count,
+  auto VulkanBackend::create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout, u32 count,
                                                DescriptorTable *out_tables) -> Result<void>
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (u32 i = 0; i < count; i++)
+    {
+      const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
+      const auto table = AU_TRY(VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl));
+      out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table)));
+    }
+
+    return {};
   }
 
   auto VulkanBackend::update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void
   {
+    auto &logger = auxid::get_thread_logger();
+
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    for (const auto &update : updates)
+    {
+      const auto table = reinterpret_cast<VulkanDescriptorTable *>(update.table);
+
+      const auto target_type = table->layout->binding_types.find(update.binding);
+      if (!target_type)
+      {
+        logger.error("UpdateDescriptorTables: Binding %d not found in layout", update.binding);
+        continue;
+      }
+
+      VkWriteDescriptorSet write{};
+      write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      write.dstBinding = update.binding;
+      write.dstArrayElement = update.array_element;
+      write.descriptorCount = 1;
+      write.descriptorType = *target_type;
+
+      VkDescriptorBufferInfo buffer_info{};
+      VkDescriptorImageInfo image_info{};
+
+      if (update.buffer)
+      {
+        write.pBufferInfo = &buffer_info;
+
+        const auto buffer_impl = reinterpret_cast<VulkanBuffer *>(update.buffer);
+
+        assert(!buffer_impl->is_frame_bound() || (update.buffer_offset == 0 && update.buffer_range == 0));
+
+        buffer_info.buffer = buffer_impl->get_handle();
+
+        if (buffer_impl->is_frame_bound())
+        {
+          assert(table->handle_count == buffer_impl->get_unit_count());
+
+          for (u32 f = 0; f < table->handle_count; f++)
+          {
+            buffer_info.offset = buffer_impl->get_stride() * f;
+            buffer_info.range = buffer_impl->get_unit_size();
+            write.dstSet = table->handles[f];
+            vkUpdateDescriptorSets(dev->get_handle(), 1, &write, 0, nullptr);
+          }
+
+          continue;
+        }
+
+        buffer_info.offset = update.buffer_offset;
+        buffer_info.range = (update.buffer_range == 0) ? VK_WHOLE_SIZE : update.buffer_range;
+      }
+      else if (update.image)
+      {
+        write.pImageInfo = &image_info;
+
+        const auto image_impl = reinterpret_cast<VulkanImage *>(update.image);
+
+        VkSampler sampler = VK_NULL_HANDLE;
+        if (update.sampler)
+          sampler = reinterpret_cast<VkSampler>(update.sampler);
+
+        image_info.imageView = image_impl->get_view();
+        image_info.sampler = sampler;
+
+        if (*target_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
+            *target_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+        {
+          image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+        else if (*target_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+        {
+          image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        }
+      }
+
+      write.dstSet = table->handles[0];
+      vkUpdateDescriptorSets(dev->get_handle(), 1, &write, 0, nullptr);
+    }
   }
 
   auto VulkanBackend::create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage)
       -> Result<Shader>
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto shader =
+        AU_TRY(VulkanShaderModule::create(*dev, Span(static_cast<const u32 *>(spirv_code), size >> 2),
+                                          static_cast<VkShaderStageFlagBits>(map_shader_stage_enum_to_vk(stage))));
+    return reinterpret_cast<Shader>(new VulkanShaderModule(std::move(shader)));
   }
 
   auto VulkanBackend::destroy_shader(Device device, Shader shader) -> void
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto shader_impl = reinterpret_cast<VulkanShaderModule *>(shader);
+    shader_impl->destroy(*dev);
+    delete shader_impl;
   }
 
   auto VulkanBackend::create_graphics_pipeline(Device device, const GraphicsPipelineDesc &desc) -> Result<Pipeline>
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto pipeline = AU_TRY(VulkanGraphicsPipeline::create(*dev, desc));
+    return reinterpret_cast<Pipeline>(new VulkanGraphicsPipeline(std::move(pipeline)));
   }
 
   auto VulkanBackend::destroy_pipeline(Device device, Pipeline pipeline) -> void
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto pipeline_impl = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    pipeline_impl->destroy(*dev);
+    delete pipeline_impl;
   }
 } // namespace ghi

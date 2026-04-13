@@ -196,7 +196,7 @@ namespace ghi
       });
     }
     AU_TRY_DISCARD(device.execute_single_time_commands([&](VkCommandBuffer cmd) {
-      cmd_pipeline_barrier(reinterpret_cast<CommandBuffer>(cmd), 0, nullptr, m_buffer_count, depth_barriers.data());
+      cmd_pipeline_barrier(reinterpret_cast<CommandBuffer>(cmd), {}, depth_barriers);
     }));
 
     logger.info("recreated swapchain (%ux%ux%u)", m_extent.width, m_extent.height, create_info.minImageCount);

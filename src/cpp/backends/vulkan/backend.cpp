@@ -420,6 +420,12 @@ namespace ghi
     height = extent.height;
   }
 
+  auto VulkanBackend::get_swapchain_image_count(Device device) -> u32
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    return dev->m_swapchain.get_backbuffer_image_count();
+  }
+
   auto VulkanBackend::begin_frame(Device device) -> CommandBuffer
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
@@ -471,7 +477,10 @@ namespace ghi
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {.color = {m_clear_color[0], m_clear_color[1], m_clear_color[2], m_clear_color[3]}},
+        .clearValue =
+            {
+                .color = dev->m_swapchain.get_clear_color(),
+            },
     };
     VkRenderingAttachmentInfo depth_attachment_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -535,6 +544,12 @@ namespace ghi
     vkEndCommandBuffer(frame.command_buffer);
 
     dev->submit_and_present(frame.command_buffer, frame.in_use_fence);
+  }
+
+  auto VulkanBackend::get_active_frame_index(Device device) -> u32
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    return dev->get_swapchain().get_current_frame_index();
   }
 
   auto VulkanBackend::wait_idle(Device device) -> void
@@ -681,5 +696,116 @@ namespace ghi
   auto VulkanBackend::cmd_pipeline_barrier(CommandBuffer cmd, Span<const BufferBarrier> buffer_barriers,
                                            Span<const ImageBarrier> image_barriers) -> void
   {
+    struct VulkanResourceStateInfo
+    {
+      VkPipelineStageFlags2 stage;
+      VkAccessFlags2 access;
+      VkImageLayout layout;
+    };
+
+    auto GetStateInfo = [](EResourceState state) -> VulkanResourceStateInfo {
+      switch (state)
+      {
+      case EResourceState::Undefined:
+        return {VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED};
+
+      case EResourceState::GeneralRead:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+
+      case EResourceState::GeneralWrite:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL};
+
+      case EResourceState::ColorTarget:
+        return {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+
+      case EResourceState::DepthTarget:
+        return {VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+      case EResourceState::Present:
+        return {VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+
+      default:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                VK_IMAGE_LAYOUT_GENERAL};
+      }
+    };
+
+    Vec<VkImageMemoryBarrier2> images;
+    Vec<VkBufferMemoryBarrier2> buffers;
+    images.reserve(image_barriers.size());
+    buffers.reserve(buffer_barriers.size());
+
+    for (const auto& desc : buffer_barriers)
+    {
+      auto *impl = reinterpret_cast<VulkanBuffer *>(desc.buffer);
+
+      const auto src_info = GetStateInfo(desc.old_state);
+      const auto dst_info = GetStateInfo(desc.new_state);
+
+      VkBufferMemoryBarrier2 barrier = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+        .srcStageMask = src_info.stage,
+        .srcAccessMask = src_info.access,
+        .dstStageMask = dst_info.stage,
+        .dstAccessMask = dst_info.access,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = impl->get_handle(),
+        .offset = 0,
+        .size = impl->get_size(),
+    };
+
+      buffers.push_back(barrier);
+    }
+
+    for (const auto& desc : image_barriers)
+    {
+      const auto *impl = reinterpret_cast<VulkanImage *>(desc.image);
+
+      const auto src_info = GetStateInfo(desc.old_state);
+      const auto dst_info = GetStateInfo(desc.new_state);
+
+      VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
+      if (is_vk_depth_format(impl->get_format()))
+        aspect_mask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+      VkImageMemoryBarrier2 barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = src_info.stage,
+        .srcAccessMask = src_info.access,
+        .dstStageMask = dst_info.stage,
+        .dstAccessMask = dst_info.access,
+        .oldLayout = src_info.layout,
+        .newLayout = dst_info.layout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = impl->get_handle(),
+        .subresourceRange =
+            {
+              .aspectMask = aspect_mask,
+              .baseMipLevel = 0,
+              .levelCount = VK_REMAINING_MIP_LEVELS,
+              .baseArrayLayer = 0,
+              .layerCount = VK_REMAINING_ARRAY_LAYERS,
+          },
+  };
+
+      images.push_back(barrier);
+    }
+
+    const VkDependencyInfo dep_info = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .bufferMemoryBarrierCount = static_cast<u32>(buffers.size()),
+        .pBufferMemoryBarriers = buffers.data(),
+        .imageMemoryBarrierCount = static_cast<u32>(images.size()),
+        .pImageMemoryBarriers = images.data(),
+    };
+
+    vkCmdPipelineBarrier2(reinterpret_cast<VkCommandBuffer>(cmd), &dep_info);
   }
 } // namespace ghi

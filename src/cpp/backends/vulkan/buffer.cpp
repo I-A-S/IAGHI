@@ -18,8 +18,8 @@
 
 namespace ghi
 {
-  auto VulkanBuffer::create(VulkanDevice &device, u64 size, VkBufferUsageFlags usage, bool is_dynamic, bool host_visible,
-                            const char *debug_name) -> Result<VulkanBuffer>
+  auto VulkanBuffer::create(VulkanDevice &device, u64 size, VkBufferUsageFlags usage, bool is_dynamic,
+                            bool is_frame_bound, bool host_visible, const char *debug_name) -> Result<VulkanBuffer>
   {
     const auto is_uniform_buffer = usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     const auto is_storage_buffer = usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
@@ -33,6 +33,7 @@ namespace ghi
     result.m_size = size;
     result.m_unit_size = size;
     result.m_is_dynamic = is_dynamic;
+    result.m_is_frame_bound = is_frame_bound;
 
     VkBufferCreateInfo buffer_info{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -48,40 +49,46 @@ namespace ghi
         .usage = host_visible ? VMA_MEMORY_USAGE_AUTO : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
     };
 
-    if (is_dynamic)
+    if (is_dynamic || is_frame_bound)
     {
       u64 min_alignment = 1;
       u64 max_range = ~0ULL;
 
-      if (is_uniform_buffer) {
+      if (is_uniform_buffer)
+      {
         min_alignment = device.get_min_uniform_buffer_offset_alignment();
         max_range = device.get_max_uniform_buffer_range();
-      } else if (is_storage_buffer) {
+      }
+      else if (is_storage_buffer)
+      {
         min_alignment = device.get_min_storage_buffer_offset_alignment();
         max_range = device.get_max_storage_buffer_range();
       }
 
-      if (size > max_range) {
+      if (size > max_range)
+      {
         return fail("Single element size exceeds maximum descriptor binding range");
       }
 
       u64 aligned_stride = size;
-      if (min_alignment > 0) {
+      if (min_alignment > 0)
+      {
         aligned_stride = (aligned_stride + min_alignment - 1) & ~(min_alignment - 1);
       }
 
       result.m_stride = aligned_stride;
 
-      buffer_info.size = aligned_stride * device.get_swapchain().get_backbuffer_image_count();
+      if (is_frame_bound)
+        result.m_size = buffer_info.size = aligned_stride * device.get_swapchain().get_backbuffer_image_count();
     }
     else
     {
       result.m_stride = size;
     }
 
-    VK_CALL(vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &result.m_handle,
-                               &result.m_allocation, &result.m_alloc_info),
-               "Creating buffer");
+    VK_CALL(vmaCreateBuffer(allocator, &buffer_info, &alloc_create_info, &result.m_handle, &result.m_allocation,
+                            &result.m_alloc_info),
+            "Creating buffer");
     vmaSetAllocationName(allocator, result.m_allocation, debug_name);
 
     return result;
@@ -93,16 +100,16 @@ namespace ghi
     m_handle = VK_NULL_HANDLE;
   }
 
-  auto VulkanBuffer::map() -> void*
+  auto VulkanBuffer::map(u32 frame_index) -> void *
   {
     if (m_alloc_info.pMappedData != nullptr)
-      return m_alloc_info.pMappedData;
+      return static_cast<u8 *>(m_alloc_info.pMappedData) + frame_index * m_stride;
 
-    void* mapped_data = nullptr;
+    void *mapped_data = nullptr;
     if (vmaMapMemory(m_device_ref.get_allocator(), m_allocation, &mapped_data) != VK_SUCCESS)
       return nullptr;
 
-    return mapped_data;
+    return static_cast<u8 *>(mapped_data) + frame_index * m_stride;
   }
 
   auto VulkanBuffer::unmap() -> void
@@ -120,17 +127,50 @@ namespace ghi
 
   auto VulkanBackend::create_buffers(Device device, Span<const BufferDesc> descs, Buffer *out_handles) -> Result<void>
   {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+
+    u32 i{0};
+    for (const auto &desc : descs)
+    {
+      const auto is_dynamic = (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::DynamicOffsetUniform)) ||
+                              (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::DynamicOffsetStorage));
+
+      const auto is_frame_bound = (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundUniform)) ||
+                                  (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundStorage));
+      const auto buffer =
+          AU_TRY(VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
+                                      is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name));
+      out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
+    }
+
+    return {};
   }
 
   auto VulkanBackend::destroy_buffers(Device device, Span<const Buffer> handles) -> void
   {
+    AU_UNUSED(device);
+
+    for (const auto handle : handles)
+    {
+      const auto buffer = reinterpret_cast<VulkanBuffer *>(handle);
+      buffer->destroy();
+      delete buffer;
+    }
+  }
+
+  auto VulkanBackend::map_frame_bound_buffer(Device device, Buffer buffer) -> void *
+  {
+    return reinterpret_cast<VulkanBuffer *>(buffer)->map(
+        reinterpret_cast<VulkanDevice *>(device)->get_swapchain().get_current_frame_index());
   }
 
   auto VulkanBackend::map_buffer(Device device, Buffer buffer) -> void *
   {
+    return reinterpret_cast<VulkanBuffer *>(buffer)->map(0);
   }
 
   auto VulkanBackend::unmap_buffer(Device device, Buffer buffer) -> void
   {
+    reinterpret_cast<VulkanBuffer *>(buffer)->unmap();
   }
 } // namespace ghi

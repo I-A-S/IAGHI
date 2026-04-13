@@ -40,16 +40,16 @@ namespace ghi::utils
 
     if (g_staging_buffer != NULL)
     {
-      ghi::destroy_buffers(device, 1, &g_staging_buffer);
+      ghi::destroy_buffers(device, {g_staging_buffer});
       g_staging_buffer = NULL;
     }
 
     const BufferDesc buffer_desc{
         .size_bytes = g_staging_buffer_size = size,
-        .usage = EBufferUsage::Transfer,
+        .usage = EBufferUsage::TransferSrc,
         .cpu_visible = true,
     };
-    AU_TRY_DISCARD(ghi::create_buffers(device, 1, &buffer_desc, &g_staging_buffer));
+    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, &g_staging_buffer));
 
     return {};
   }
@@ -60,16 +60,16 @@ namespace ghi::utils
 
     BufferDesc buffer_desc{
         .size_bytes = g_staging_buffer_size,
-        .usage = EBufferUsage::Transfer,
+        .usage = EBufferUsage::TransferSrc,
         .cpu_visible = true,
     };
-    AU_TRY_DISCARD(ghi::create_buffers(device, 1, &buffer_desc, &g_staging_buffer));
+    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, &g_staging_buffer));
 
     ghi::SamplerDesc sampler_desc{
         .linear_filter = false,
         .repeat_uv = true,
     };
-    AU_TRY_DISCARD(ghi::create_samplers(device, 1, &sampler_desc, &g_default_sampler));
+    AU_TRY_DISCARD(ghi::create_samplers(device, {sampler_desc}, &g_default_sampler));
 
     { // Default Image
       const u32 width = 32;
@@ -78,18 +78,23 @@ namespace ghi::utils
 
       Vec<u8> rgba_data(width * height * 4);
 
-      for (u32 y = 0; y < height; ++y) {
-        for (u32 x = 0; x < width; ++x) {
+      for (u32 y = 0; y < height; ++y)
+      {
+        for (u32 x = 0; x < width; ++x)
+        {
           bool is_violet = ((x / checker_size) % 2) == ((y / checker_size) % 2);
 
           u32 index = (y * width + x) * 4;
 
-          if (is_violet) {
+          if (is_violet)
+          {
             rgba_data[index + 0] = 255;
             rgba_data[index + 1] = 0;
             rgba_data[index + 2] = 255;
             rgba_data[index + 3] = 255;
-          } else {
+          }
+          else
+          {
             rgba_data[index + 0] = 255;
             rgba_data[index + 1] = 255;
             rgba_data[index + 2] = 255;
@@ -106,11 +111,11 @@ namespace ghi::utils
 
   auto shutdown(Device device) -> void
   {
-    ghi::destroy_images(device, 1, &g_default_image);
-    ghi::destroy_samplers(device, 1, &g_default_sampler);
+    ghi::destroy_images(device, {g_default_image});
+    ghi::destroy_samplers(device, {g_default_sampler});
 
-    ghi::destroy_buffers(device, 1, &g_staging_buffer);
-    g_staging_buffer = NULL;
+    ghi::destroy_buffers(device, {g_staging_buffer});
+    g_staging_buffer = nullptr;
     g_staging_buffer_size = 0;
 
     glslang::FinalizeProcess();
@@ -127,12 +132,14 @@ namespace ghi::utils
         .usage = usage,
         .cpu_visible = false,
     };
-    AU_TRY_DISCARD(ghi::create_buffers(device, 1, &buffer_desc, &buffer));
+    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, &buffer));
 
     if (!initial_data)
       return buffer;
 
-    AU_TRY_DISCARD(ghi::upload_buffer_data(device, g_staging_buffer, initial_data, initial_data_size));
+    const auto ptr = ghi::map_buffer(device, g_staging_buffer);
+    memcpy(ptr, initial_data, initial_data_size);
+    ghi::unmap_buffer(device, g_staging_buffer);
 
     AU_TRY_DISCARD(ghi::execute_single_time_commands(device, [&](CommandBuffer cmd) {
       ghi::cmd_copy_buffer(cmd, g_staging_buffer, buffer, initial_data_size, 0, 0);
@@ -174,9 +181,9 @@ namespace ghi::utils
         .array_layers = 1,         // [IATODO]
         .type = ETextureType::_2D, // [IATODO]
     };
-    AU_TRY_DISCARD(ghi::create_images(device, 1, &desc, &image));
+    AU_TRY_DISCARD(ghi::create_images(device, {desc}, &image));
 
-    AU_TRY_DISCARD(ghi::upload_image_data(device, 1, &image, &rgba_data, false));
+    AU_TRY_DISCARD(ghi::upload_image_data(device, {image}, {rgba_data}, false));
 
     return image;
   }

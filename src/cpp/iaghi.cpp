@@ -39,6 +39,11 @@ namespace ghi
     VulkanBackend::destroy_buffers(device, handles);
   }
 
+  auto map_frame_bound_buffer(Device device, Buffer buffer) -> void *
+  {
+    return VulkanBackend::map_frame_bound_buffer(device, buffer);
+  }
+
   auto map_buffer(Device device, Buffer buffer) -> void *
   {
     return VulkanBackend::map_buffer(device, buffer);
@@ -75,20 +80,21 @@ namespace ghi
     VulkanBackend::destroy_samplers(device, handles);
   }
 
-  auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>
+  auto create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets,
+                              BindingLayout *out_layouts) -> Result<void>
   {
-    return VulkanBackend::create_binding_layout(device, entries);
+    return VulkanBackend::create_binding_layouts(device, entry_sets, out_layouts);
   }
 
-  auto destroy_binding_layout(Device device, BindingLayout layout) -> void
+  auto destroy_binding_layouts(Device device, Span<const BindingLayout> layouts) -> void
   {
-    VulkanBackend::destroy_binding_layout(device, layout);
+    VulkanBackend::destroy_binding_layouts(device, layouts);
   }
 
-  auto create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count,
+  auto create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout, u32 count,
                                 DescriptorTable *out_tables) -> Result<void>
   {
-    return VulkanBackend::create_descriptor_tables(device, layout, is_frame_bound, count, out_tables);
+    return VulkanBackend::create_descriptor_tables(device, is_frame_bound, layout, count, out_tables);
   }
 
   auto update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void
@@ -131,6 +137,11 @@ namespace ghi
     VulkanBackend::get_swapchain_extent(device, width, height);
   }
 
+  auto get_swapchain_image_count(Device device) -> u32
+  {
+    return VulkanBackend::get_swapchain_image_count(device);
+  }
+
   auto begin_frame(Device device) -> CommandBuffer
   {
     return VulkanBackend::begin_frame(device);
@@ -139,6 +150,11 @@ namespace ghi
   auto end_frame(Device device) -> void
   {
     VulkanBackend::end_frame(device);
+  }
+
+  auto get_active_frame_index(Device device) -> u32
+  {
+    return VulkanBackend::get_active_frame_index(device);
   }
 
   auto wait_idle(Device device) -> void

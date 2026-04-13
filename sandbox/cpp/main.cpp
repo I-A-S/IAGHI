@@ -33,9 +33,21 @@ layout(location = 1) in vec2 inTexCoord;
 
 layout(location = 0) out vec2 vUV;
 
+layout(set = 0, binding = 0) uniform GlobalDataUBO_T {
+    mat4 projection;
+} global_data;
+
+layout(set = 1, binding = 0) uniform PerFrameDataUBO_T {
+    mat4 view;
+} per_frame_data;
+
+layout(push_constant, std430) uniform PushConstants {
+    mat4 model;
+} pc;
+
 void main()
 {
-    gl_Position = vec4(inPosition, 0.0, 1.0);
+    gl_Position = global_data.projection * per_frame_data.view * pc.model * vec4(inPosition, 0.0, 1.0);
     vUV = inTexCoord;
 }
 )";
@@ -45,7 +57,7 @@ void main()
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 0) uniform sampler2D tex;
+layout(set = 2, binding = 0) uniform sampler2D tex;
 
 void main()
 {
@@ -87,10 +99,11 @@ void main()
 
     AU_TRY_DISCARD(ghi::utils::initialize(device));
 
-    ghi::set_clear_color(100.0f / 255.0f, 149.0f / 255.0f, 237.0f / 255.0f, 1.0f);
+    ghi::set_clear_color(device, 100.0f / 255.0f, 149.0f / 255.0f, 237.0f / 255.0f, 1.0f);
 
     const auto vertex_shader = AU_TRY(utils::create_shader_from_glsl(device, VERTEX_SHADER_SRC, EShaderStage::Vertex));
-    const auto fragment_shader = AU_TRY(utils::create_shader_from_glsl(device, FRAGMENT_SHADER_SRC, EShaderStage::Fragment));
+    const auto fragment_shader =
+        AU_TRY(utils::create_shader_from_glsl(device, FRAGMENT_SHADER_SRC, EShaderStage::Fragment));
 
     VertexInputBinding vertex_input_binding{
         .binding = 0,
@@ -103,15 +116,40 @@ void main()
         {.location = 1, .binding = 0, .format = EFormat::R32G32Float, .offset = sizeof(glm::vec2)},
     };
 
-    const auto binding_layout =
-        AU_TRY(ghi::create_binding_layout(device, {
-                                                      BindingLayoutEntry{
-                                                          .binding = 0,
-                                                          .count = 1,
-                                                          .visibility = EShaderStage::Fragment,
-                                                          .type = EDescriptorType::CombinedImageSampler,
-                                                      },
-                                                  }));
+    BindingLayout _layout_handles[3] = {};
+    AU_TRY_DISCARD(ghi::create_binding_layouts(device,
+                                               {
+                                                   {
+                                                       BindingLayoutEntry{
+                                                           .binding = 0,
+                                                           .count = 1,
+                                                           .visibility = EShaderStage::Fragment,
+                                                           .type = EDescriptorType::CombinedImageSampler,
+                                                       },
+                                                   },
+                                                   {
+                                                       BindingLayoutEntry{
+                                                           .binding = 0,
+                                                           .count = 1,
+                                                           .visibility = EShaderStage::Vertex,
+                                                           .type = EDescriptorType::UniformBuffer,
+                                                       },
+                                                   },
+                                                   {
+                                                       BindingLayoutEntry{
+                                                           .binding = 0,
+                                                           .count = 1,
+                                                           .visibility = EShaderStage::Vertex,
+                                                           .type = EDescriptorType::UniformBuffer,
+                                                       },
+                                                   },
+                                               },
+                                               _layout_handles));
+
+    BindingLayout texture_binding_layout, global_data_binding_layout, per_frame_data_binding_layout;
+    texture_binding_layout = _layout_handles[0];
+    global_data_binding_layout = _layout_handles[1];
+    per_frame_data_binding_layout = _layout_handles[2];
 
     auto color_format = ghi::get_swapchain_format(device);
     ghi::GraphicsPipelineDesc pipeline_desc{
@@ -123,25 +161,72 @@ void main()
         .depth_format = EFormat::D32Sfloat,
         .cull_mode = ECullMode::None,
 
-        .binding_layouts = {binding_layout},
+        .binding_layouts = {global_data_binding_layout, per_frame_data_binding_layout, texture_binding_layout},
         .vertex_bindings = {vertex_input_binding},
         .vertex_attributes = {vertex_input_attributes},
+        .push_constant_ranges =
+            {
+                PushConstantRange{0, sizeof(glm::mat4),
+                                  (EShaderStage) ((u32) EShaderStage::Vertex | (u32) EShaderStage::Fragment)},
+            },
     };
-    const auto pipeline = AU_TRY(ghi::create_graphics_pipeline(device, &pipeline_desc));
+    const auto pipeline = AU_TRY(ghi::create_graphics_pipeline(device, pipeline_desc));
 
-    DescriptorTable descriptor_table;
-    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, binding_layout, 1, &descriptor_table));
+    ghi::Buffer buffers[2];
+    AU_TRY_DISCARD(ghi::create_buffers(device,
+                                       {
+                                           ghi::BufferDesc{
+                                               .size_bytes = sizeof(glm::mat4),
+                                               .usage = EBufferUsage::StaticUniform,
+                                               .cpu_visible = true,
+                                           },
+                                           ghi::BufferDesc{
+                                               .size_bytes = sizeof(glm::mat4),
+                                               .usage = EBufferUsage::FrameBoundUniform,
+                                               .cpu_visible = true,
+                                           },
+                                       },
+                                       buffers));
 
-    DescriptorUpdate descriptor_update{
-        .table = descriptor_table,
-        .binding = 0,
-        .array_element = 0,
+    DescriptorTable texture_descriptor_table, global_data_descriptor_table, per_frame_data_descriptor_table;
+    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, false, texture_binding_layout, 1, &texture_descriptor_table));
+    AU_TRY_DISCARD(
+        ghi::create_descriptor_tables(device, false, global_data_binding_layout, 1, &global_data_descriptor_table));
+    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, true, per_frame_data_binding_layout, 1,
+                                                 &per_frame_data_descriptor_table));
 
-        .image = ghi::utils::get_default_image(),
-        .sampler = ghi::utils::get_default_sampler(),
-        .image_update_all_frames = true,
+    DescriptorUpdate descriptor_updates[3] = {
+        {
+            .table = global_data_descriptor_table,
+            .binding = 0,
+            .array_element = 0,
+
+            .buffer = buffers[0],
+        },
+        {
+            .table = per_frame_data_descriptor_table,
+            .binding = 0,
+            .array_element = 0,
+
+            .buffer = buffers[1],
+        },
+        {
+            .table = texture_descriptor_table,
+            .binding = 0,
+            .array_element = 0,
+
+            .image = ghi::utils::get_default_image(),
+            .sampler = ghi::utils::get_default_sampler(),
+        },
     };
-    update_descriptor_tables(device, 1, &descriptor_update);
+    update_descriptor_tables(device, descriptor_updates);
+
+    glm::mat4 m{1.0f};
+    {
+      const auto ptr = ghi::map_buffer(device, buffers[0]);
+      memcpy(ptr, &m, sizeof(glm::mat4));
+      ghi::unmap_buffer(device, buffers[0]);
+    }
 
     ghi::destroy_shader(device, vertex_shader);
     ghi::destroy_shader(device, fragment_shader);
@@ -185,18 +270,28 @@ void main()
       delta_time = current_frame - last_frame;
       last_frame = current_frame;
 
+      {
+        const auto ptr = ghi::map_frame_bound_buffer(device, buffers[1]);
+        memcpy(ptr, &m, sizeof(glm::mat4));
+        ghi::unmap_buffer(device, buffers[1]);
+      }
+
       const auto cmd = ghi::begin_frame(device);
 
       ghi::cmd_bind_pipeline(cmd, pipeline);
 
-      ghi::cmd_bind_descriptor_table(cmd, 0, pipeline, descriptor_table);
+      ghi::cmd_bind_descriptor_table(cmd, 0, pipeline, global_data_descriptor_table, {});
+      ghi::cmd_bind_descriptor_table(cmd, 2, pipeline, texture_descriptor_table, {});
+
+      ghi::cmd_bind_frame_bound_descriptor_table(cmd, 1, pipeline, per_frame_data_descriptor_table);
 
       ghi::cmd_set_viewport(cmd, 0, 0, 800, 600);
       ghi::cmd_set_scissor(cmd, 0, 0, 800, 600);
 
-      u64 off = 0;
-      ghi::cmd_bind_vertex_buffers(cmd, 0, 1, &vertex_buffer, &off);
+      ghi::cmd_bind_vertex_buffers(cmd, 0, {vertex_buffer}, {0});
       ghi::cmd_bind_index_buffer(cmd, index_buffer, 0, true);
+
+      ghi::cmd_push_constants(cmd, pipeline, 0, sizeof(glm::mat4), &m);
 
       ghi::cmd_draw_indexed(cmd, 6, 1, 0, 0, 0);
 
@@ -207,12 +302,12 @@ void main()
 
     ghi::utils::shutdown(device);
 
-    ghi::destroy_binding_layout(device, binding_layout);
+    ghi::destroy_binding_layouts(device,
+                                 {texture_binding_layout, global_data_binding_layout, per_frame_data_binding_layout});
 
     ghi::destroy_pipeline(device, pipeline);
 
-    ghi::destroy_buffers(device, 1, &vertex_buffer);
-    ghi::destroy_buffers(device, 1, &index_buffer);
+    ghi::destroy_buffers(device, {vertex_buffer, index_buffer, buffers[0], buffers[1]});
 
     ghi::destroy_device(device);
 

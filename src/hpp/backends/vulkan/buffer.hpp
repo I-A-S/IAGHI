@@ -28,12 +28,12 @@ public:
     {
     }
 
-    static auto create(VulkanDevice &device, u64 size, VkBufferUsageFlags usage, bool is_dynamic, bool host_visible,
+    static auto create(VulkanDevice &device, u64 size, VkBufferUsageFlags usage, bool is_dynamic, bool is_frame_bound, bool host_visible,
                        const char *debug_name = "<not_set>") -> Result<VulkanBuffer>;
 
     auto destroy() -> void;
 
-    auto map() -> void *;
+    auto map(u32 frame_index) -> void *;
     auto unmap() -> void;
     auto flush(u64 offset = 0, u64 size = VK_WHOLE_SIZE) -> void;
 
@@ -58,6 +58,11 @@ public:
       return m_is_dynamic;
     }
 
+    auto is_frame_bound() -> bool
+    {
+      return m_is_frame_bound;
+    }
+
     auto get_unit_size() -> u64
     {
       return m_unit_size;
@@ -70,7 +75,7 @@ public:
 
     auto get_unit_count() -> u64
     {
-      return m_size / m_unit_size;
+      return m_size / m_stride;
     }
 
 protected:
@@ -78,6 +83,7 @@ protected:
     u64 m_stride{};
     u64 m_unit_size{};
     bool m_is_dynamic{};
+    bool m_is_frame_bound{};
     VkBuffer m_handle{};
     VulkanDevice &m_device_ref;
     VmaAllocation m_allocation{};

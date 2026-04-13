@@ -28,6 +28,7 @@ namespace ghi
       BackendT::create_buffers(std::declval<Device>(), std::declval<Span<const BufferDesc>>(), std::declval<Buffer *>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_buffers(std::declval<Device>(), std::declval<Span<const Buffer>>()) } -> std::same_as<void>;
+    { BackendT::map_frame_bound_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void *>;
     { BackendT::map_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void *>;
     { BackendT::unmap_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void>;
 
@@ -37,23 +38,26 @@ namespace ghi
     { BackendT::destroy_images(std::declval<Device>(), std::declval<Span<const Image>>()) } -> std::same_as<void>;
     {
       BackendT::upload_image_data(std::declval<Device>(), std::declval<Span<const Image>>(),
-                                std::declval<Span<const u8 *const>>(), std::declval<bool>())
+                                  std::declval<Span<const u8 *const>>(), std::declval<bool>())
     } -> std::same_as<Result<void>>;
 
     {
       BackendT::create_samplers(std::declval<Device>(), std::declval<Span<const SamplerDesc>>(),
-                              std::declval<Sampler *>())
+                                std::declval<Sampler *>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_samplers(std::declval<Device>(), std::declval<Span<const Sampler>>()) } -> std::same_as<void>;
 
     {
-      BackendT::create_binding_layout(std::declval<Device>(), std::declval<Span<const BindingLayoutEntry>>())
-    } -> std::same_as<Result<BindingLayout>>;
-    { BackendT::destroy_binding_layout(std::declval<Device>(), std::declval<BindingLayout>()) } -> std::same_as<void>;
+      BackendT::create_binding_layouts(std::declval<Device>(), std::declval<Span<const Span<const BindingLayoutEntry>>>(),
+                                       std::declval<BindingLayout *>())
+    } -> std::same_as<Result<void>>;
+    {
+      BackendT::destroy_binding_layouts(std::declval<Device>(), std::declval<Span<const BindingLayout>>())
+    } -> std::same_as<void>;
 
     {
-      BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<BindingLayout>(), std::declval<bool>(),
-                                       std::declval<u32>(), std::declval<DescriptorTable *>())
+      BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<bool>, std::declval<BindingLayout>(), std::declval<u32>(),
+                                         std::declval<DescriptorTable *>())
     } -> std::same_as<Result<void>>;
     {
       BackendT::update_descriptor_tables(std::declval<Device>(), std::declval<Span<const DescriptorUpdate>>())
@@ -61,7 +65,7 @@ namespace ghi
 
     {
       BackendT::create_shader(std::declval<Device>(), std::declval<const void *>(), std::declval<usize>(),
-                            std::declval<EShaderStage>())
+                              std::declval<EShaderStage>())
     } -> std::same_as<Result<Shader>>;
     { BackendT::destroy_shader(std::declval<Device>(), std::declval<Shader>()) } -> std::same_as<void>;
 
@@ -77,76 +81,79 @@ namespace ghi
     {
       BackendT::get_swapchain_extent(std::declval<Device>(), std::declval<u32 &>(), std::declval<u32 &>())
     } -> std::same_as<void>;
+    { BackendT::get_swapchain_image_count(std::declval<Device>()) } -> std::same_as<u32>;
 
     { BackendT::begin_frame(std::declval<Device>()) } -> std::same_as<CommandBuffer>;
     { BackendT::end_frame(std::declval<Device>()) } -> std::same_as<void>;
+    { BackendT::get_active_frame_index(std::declval<Device>()) } -> std::same_as<u32>;
 
     { BackendT::wait_idle(std::declval<Device>()) } -> std::same_as<void>;
     {
-      BackendT::set_clear_color(std::declval<Device>(), std::declval<f32>(), std::declval<f32>(), std::declval<f32>(), std::declval<f32>())
+      BackendT::set_clear_color(std::declval<Device>(), std::declval<f32>(), std::declval<f32>(), std::declval<f32>(),
+                                std::declval<f32>())
     } -> std::same_as<void>;
 
     {
       BackendT::execute_single_time_commands(std::declval<Device>(),
-                                           std::declval<const std::function<void(CommandBuffer)> &>())
+                                             std::declval<const std::function<void(CommandBuffer)> &>())
     } -> std::same_as<Result<void>>;
 
     {
       BackendT::cmd_copy_buffer(std::declval<CommandBuffer>(), std::declval<Buffer>(), std::declval<Buffer>(),
-                              std::declval<u64>(), std::declval<u64>(), std::declval<u64>())
+                                std::declval<u64>(), std::declval<u64>(), std::declval<u64>())
     } -> std::same_as<void>;
 
     {
       BackendT::cmd_bind_vertex_buffers(std::declval<CommandBuffer>(), std::declval<u32>(),
-                                      std::declval<Span<const Buffer>>(), std::declval<Span<const u64>>())
+                                        std::declval<Span<const Buffer>>(), std::declval<Span<const u64>>())
     } -> std::same_as<void>;
     {
       BackendT::cmd_bind_index_buffer(std::declval<CommandBuffer>(), std::declval<Buffer>(), std::declval<u64>(),
-                                    std::declval<bool>())
+                                      std::declval<bool>())
     } -> std::same_as<void>;
 
     { BackendT::cmd_bind_pipeline(std::declval<CommandBuffer>(), std::declval<Pipeline>()) } -> std::same_as<void>;
 
     {
       BackendT::cmd_push_constants(std::declval<CommandBuffer>(), std::declval<Pipeline>(), std::declval<u32>(),
-                                 std::declval<u32>(), std::declval<const void *>())
+                                   std::declval<u32>(), std::declval<const void *>())
     } -> std::same_as<void>;
 
     {
       BackendT::cmd_bind_frame_bound_descriptor_table(std::declval<CommandBuffer>(), std::declval<u32>(),
-                                                    std::declval<Pipeline>(), std::declval<DescriptorTable>())
+                                                      std::declval<Pipeline>(), std::declval<DescriptorTable>())
     } -> std::same_as<void>;
     {
       BackendT::cmd_bind_descriptor_table(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<Pipeline>(),
-                                        std::declval<DescriptorTable>(), std::declval<Span<const u32>>())
+                                          std::declval<DescriptorTable>(), std::declval<Span<const u32>>())
     } -> std::same_as<void>;
 
     {
       BackendT::cmd_set_viewport(std::declval<CommandBuffer>(), std::declval<f32>(), std::declval<f32>(),
-                               std::declval<f32>(), std::declval<f32>())
+                                 std::declval<f32>(), std::declval<f32>())
     } -> std::same_as<void>;
     {
       BackendT::cmd_set_scissor(std::declval<CommandBuffer>(), std::declval<i32>(), std::declval<i32>(),
-                              std::declval<i32>(), std::declval<i32>())
+                                std::declval<i32>(), std::declval<i32>())
     } -> std::same_as<void>;
 
     {
       BackendT::cmd_draw(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<u32>(), std::declval<u32>(),
-                       std::declval<u32>())
+                         std::declval<u32>())
     } -> std::same_as<void>;
     {
       BackendT::cmd_draw_indexed(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<u32>(),
-                               std::declval<u32>(), std::declval<u32>(), std::declval<u32>())
+                                 std::declval<u32>(), std::declval<u32>(), std::declval<u32>())
     } -> std::same_as<void>;
 
     {
       BackendT::cmd_draw_indexed_indirect(std::declval<CommandBuffer>(), std::declval<Buffer>(), std::declval<u64>(),
-                                        std::declval<u32>(), std::declval<u32>())
+                                          std::declval<u32>(), std::declval<u32>())
     } -> std::same_as<void>;
 
     {
       BackendT::cmd_pipeline_barrier(std::declval<CommandBuffer>(), std::declval<Span<const BufferBarrier>>(),
-                                   std::declval<Span<const ImageBarrier>>())
+                                     std::declval<Span<const ImageBarrier>>())
     } -> std::same_as<void>;
   };
 } // namespace ghi

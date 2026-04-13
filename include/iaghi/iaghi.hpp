@@ -220,11 +220,6 @@ namespace ghi
   {
     u32 binding;
     u32 count;
-
-    u32 pc_size{};
-    u32 pc_offset{};
-    bool is_push_constant{false};
-
     EShaderStage visibility;
     EDescriptorType type;
   } BindingLayoutEntry;
@@ -241,9 +236,6 @@ namespace ghi
 
     Image image;
     Sampler sampler;
-
-    u32 update_frame_index{0};
-    bool update_all_frames{false};
   } DescriptorUpdate;
 
   typedef struct VertexInputBinding
@@ -260,6 +252,13 @@ namespace ghi
     EFormat format;
     u32 offset;
   } VertexInputAttribute;
+
+  struct PushConstantRange
+  {
+    u32 offset;
+    u32 size;
+    EShaderStage stages;
+  };
 
   typedef struct GraphicsPipelineDesc
   {
@@ -278,6 +277,7 @@ namespace ghi
     Span<const BindingLayout> binding_layouts;
     Span<const VertexInputBinding> vertex_bindings;
     Span<const VertexInputAttribute> vertex_attributes;
+    Span<const PushConstantRange> push_constant_ranges;
   } GraphicsPipelineDesc;
 
   typedef struct ComputePipelineDesc
@@ -332,6 +332,7 @@ namespace ghi
 
   auto create_buffers(Device device, Span<const BufferDesc> descs, Buffer *out_handles) -> Result<void>;
   auto destroy_buffers(Device device, Span<const Buffer> handles) -> void;
+  auto map_frame_bound_buffer(Device device, Buffer buffer) -> void*;
   auto map_buffer(Device device, Buffer buffer) -> void*;
   auto unmap_buffer(Device device, Buffer buffer) -> void;
 
@@ -343,10 +344,10 @@ namespace ghi
   auto create_samplers(Device device, Span<const SamplerDesc> descs, Sampler *out_handles) -> Result<void>;
   auto destroy_samplers(Device device, Span<const Sampler> handles) -> void;
 
-  auto create_binding_layout(Device device, Span<const BindingLayoutEntry> entries) -> Result<BindingLayout>;
-  auto destroy_binding_layout(Device device, BindingLayout layout) -> void;
+  auto create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets, BindingLayout* out_layouts) -> Result<void>;
+  auto destroy_binding_layouts(Device device, Span<const BindingLayout> layouts) -> void;
 
-  auto create_descriptor_tables(Device device, BindingLayout layout, bool is_frame_bound, u32 count, DescriptorTable *out_tables)
+  auto create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout, u32 count, DescriptorTable *out_tables)
       -> Result<void>;
   auto update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void;
 
@@ -359,9 +360,11 @@ namespace ghi
   auto resize_swapchain(Device device, u32 width, u32 height) -> Result<void>;
   auto get_swapchain_format(Device device) -> EFormat;
   auto get_swapchain_extent(Device device, u32& width, u32& height) -> void;
+  auto get_swapchain_image_count(Device device) -> u32;
 
   auto begin_frame(Device device) -> CommandBuffer;
   auto end_frame(Device device) -> void;
+  auto get_active_frame_index(Device device) -> u32;
 
   auto wait_idle(Device device) -> void;
   auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;

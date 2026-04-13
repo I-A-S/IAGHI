@@ -34,7 +34,6 @@ namespace ghi
   struct VulkanBindingLayout
   {
     VkDescriptorSetLayout handle{};
-    Vec<VkPushConstantRange> push_constants;
     HashMap<u32, VkDescriptorType> binding_types;
 
     static auto create(VulkanDevice& device, Span<const BindingLayoutEntry> entries)
@@ -46,7 +45,7 @@ namespace ghi
   {
     VkPipelineLayout handle{};
 
-    static auto create(VulkanDevice& device, Span<const VulkanBindingLayout*> bindings)
+    static auto create(VulkanDevice& device, Span<const VulkanBindingLayout*> bindings, Span<const VkPushConstantRange> push_constants)
         -> Result<VulkanPipelineLayout>;
     auto destroy(VulkanDevice& device) -> void;
   };
@@ -57,7 +56,7 @@ namespace ghi
     VkDescriptorSet handles[NUM_FRAMES_BUFFERED]{};
     VulkanBindingLayout *layout{nullptr};
 
-    static auto create(VulkanDevice& device, bool is_dynamic, VulkanBindingLayout* layout) -> Result<VulkanDescriptorTable>;
+    static auto create(VulkanDevice& device, bool is_frame_bound, VulkanBindingLayout* layout) -> Result<VulkanDescriptorTable>;
     auto destroy(VulkanDevice& device) -> void;
   };
 
