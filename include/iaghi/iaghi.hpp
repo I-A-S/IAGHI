@@ -330,24 +330,24 @@ namespace ghi
   auto create_device(const InitInfo &init_info) -> Result<Device>;
   auto destroy_device(Device device) -> void;
 
-  auto create_buffers(Device device, Span<const BufferDesc> descs, Buffer *out_handles) -> Result<void>;
+  auto create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer* const> out_handles) -> Result<void>;
   auto destroy_buffers(Device device, Span<const Buffer> handles) -> void;
   auto map_frame_bound_buffer(Device device, Buffer buffer) -> void*;
   auto map_buffer(Device device, Buffer buffer) -> void*;
   auto unmap_buffer(Device device, Buffer buffer) -> void;
 
-  auto create_images(Device device, Span<const ImageDesc> descs, Image *out_handles) -> Result<void>;
+  auto create_images(Device device, Span<const ImageDesc> descs, Span<Image* const> out_handles) -> Result<void>;
   auto destroy_images(Device device, Span<const Image> handles) -> void;
   auto upload_image_data(Device device, Span<const Image> handles, Span<const u8 * const> image_data, bool generate_mip_maps)
       -> Result<void>;
 
-  auto create_samplers(Device device, Span<const SamplerDesc> descs, Sampler *out_handles) -> Result<void>;
+  auto create_samplers(Device device, Span<const SamplerDesc> descs, Span< Sampler* const> out_handles) -> Result<void>;
   auto destroy_samplers(Device device, Span<const Sampler> handles) -> void;
 
-  auto create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets, BindingLayout* out_layouts) -> Result<void>;
+  auto create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets, Span<BindingLayout* const> out_layouts) -> Result<void>;
   auto destroy_binding_layouts(Device device, Span<const BindingLayout> layouts) -> void;
 
-  auto create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout, u32 count, DescriptorTable *out_tables)
+  auto create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout, Span<DescriptorTable* const> out_tables)
       -> Result<void>;
   auto update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void;
 

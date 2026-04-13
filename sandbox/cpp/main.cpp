@@ -116,40 +116,37 @@ void main()
         {.location = 1, .binding = 0, .format = EFormat::R32G32Float, .offset = sizeof(glm::vec2)},
     };
 
-    BindingLayout _layout_handles[3] = {};
-    AU_TRY_DISCARD(ghi::create_binding_layouts(device,
-                                               {
-                                                   {
-                                                       BindingLayoutEntry{
-                                                           .binding = 0,
-                                                           .count = 1,
-                                                           .visibility = EShaderStage::Fragment,
-                                                           .type = EDescriptorType::CombinedImageSampler,
-                                                       },
-                                                   },
-                                                   {
-                                                       BindingLayoutEntry{
-                                                           .binding = 0,
-                                                           .count = 1,
-                                                           .visibility = EShaderStage::Vertex,
-                                                           .type = EDescriptorType::UniformBuffer,
-                                                       },
-                                                   },
-                                                   {
-                                                       BindingLayoutEntry{
-                                                           .binding = 0,
-                                                           .count = 1,
-                                                           .visibility = EShaderStage::Vertex,
-                                                           .type = EDescriptorType::UniformBuffer,
-                                                       },
-                                                   },
-                                               },
-                                               _layout_handles));
-
     BindingLayout texture_binding_layout, global_data_binding_layout, per_frame_data_binding_layout;
-    texture_binding_layout = _layout_handles[0];
-    global_data_binding_layout = _layout_handles[1];
-    per_frame_data_binding_layout = _layout_handles[2];
+
+    AU_TRY_DISCARD(ghi::create_binding_layouts(
+        device,
+        {
+            {
+                BindingLayoutEntry{
+                    .binding = 0,
+                    .count = 1,
+                    .visibility = EShaderStage::Fragment,
+                    .type = EDescriptorType::CombinedImageSampler,
+                },
+            },
+            {
+                BindingLayoutEntry{
+                    .binding = 0,
+                    .count = 1,
+                    .visibility = EShaderStage::Vertex,
+                    .type = EDescriptorType::UniformBuffer,
+                },
+            },
+            {
+                BindingLayoutEntry{
+                    .binding = 0,
+                    .count = 1,
+                    .visibility = EShaderStage::Vertex,
+                    .type = EDescriptorType::UniformBuffer,
+                },
+            },
+        },
+        {&texture_binding_layout, &global_data_binding_layout, &per_frame_data_binding_layout}));
 
     auto color_format = ghi::get_swapchain_format(device);
     ghi::GraphicsPipelineDesc pipeline_desc{
@@ -172,7 +169,7 @@ void main()
     };
     const auto pipeline = AU_TRY(ghi::create_graphics_pipeline(device, pipeline_desc));
 
-    ghi::Buffer buffers[2];
+    ghi::Buffer ubo_global_data_buffer, ubo_per_frame_data_buffer;
     AU_TRY_DISCARD(ghi::create_buffers(device,
                                        {
                                            ghi::BufferDesc{
@@ -186,14 +183,14 @@ void main()
                                                .cpu_visible = true,
                                            },
                                        },
-                                       buffers));
+                                       {&ubo_global_data_buffer, &ubo_per_frame_data_buffer}));
 
     DescriptorTable texture_descriptor_table, global_data_descriptor_table, per_frame_data_descriptor_table;
-    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, false, texture_binding_layout, 1, &texture_descriptor_table));
+    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, false, texture_binding_layout, {&texture_descriptor_table}));
     AU_TRY_DISCARD(
-        ghi::create_descriptor_tables(device, false, global_data_binding_layout, 1, &global_data_descriptor_table));
-    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, true, per_frame_data_binding_layout, 1,
-                                                 &per_frame_data_descriptor_table));
+        ghi::create_descriptor_tables(device, false, global_data_binding_layout, {&global_data_descriptor_table}));
+    AU_TRY_DISCARD(
+        ghi::create_descriptor_tables(device, true, per_frame_data_binding_layout, {&per_frame_data_descriptor_table}));
 
     DescriptorUpdate descriptor_updates[3] = {
         {
@@ -201,14 +198,14 @@ void main()
             .binding = 0,
             .array_element = 0,
 
-            .buffer = buffers[0],
+            .buffer = ubo_global_data_buffer,
         },
         {
             .table = per_frame_data_descriptor_table,
             .binding = 0,
             .array_element = 0,
 
-            .buffer = buffers[1],
+            .buffer = ubo_per_frame_data_buffer,
         },
         {
             .table = texture_descriptor_table,
@@ -223,9 +220,9 @@ void main()
 
     glm::mat4 m{1.0f};
     {
-      const auto ptr = ghi::map_buffer(device, buffers[0]);
+      const auto ptr = ghi::map_buffer(device, ubo_global_data_buffer);
       memcpy(ptr, &m, sizeof(glm::mat4));
-      ghi::unmap_buffer(device, buffers[0]);
+      ghi::unmap_buffer(device, ubo_global_data_buffer);
     }
 
     ghi::destroy_shader(device, vertex_shader);
@@ -271,9 +268,9 @@ void main()
       last_frame = current_frame;
 
       {
-        const auto ptr = ghi::map_frame_bound_buffer(device, buffers[1]);
+        const auto ptr = ghi::map_frame_bound_buffer(device, ubo_per_frame_data_buffer);
         memcpy(ptr, &m, sizeof(glm::mat4));
-        ghi::unmap_buffer(device, buffers[1]);
+        ghi::unmap_buffer(device, ubo_per_frame_data_buffer);
       }
 
       const auto cmd = ghi::begin_frame(device);
@@ -307,7 +304,7 @@ void main()
 
     ghi::destroy_pipeline(device, pipeline);
 
-    ghi::destroy_buffers(device, {vertex_buffer, index_buffer, buffers[0], buffers[1]});
+    ghi::destroy_buffers(device, {vertex_buffer, index_buffer, ubo_global_data_buffer, ubo_per_frame_data_buffer});
 
     ghi::destroy_device(device);
 

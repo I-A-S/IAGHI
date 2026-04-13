@@ -125,7 +125,7 @@ namespace ghi
     vmaFlushAllocation(m_device_ref.get_allocator(), m_allocation, offset, size);
   }
 
-  auto VulkanBackend::create_buffers(Device device, Span<const BufferDesc> descs, Buffer *out_handles) -> Result<void>
+  auto VulkanBackend::create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer* const> out_handles) -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
@@ -140,7 +140,7 @@ namespace ghi
       const auto buffer =
           AU_TRY(VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
                                       is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name));
-      out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
+      *out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
     }
 
     return {};

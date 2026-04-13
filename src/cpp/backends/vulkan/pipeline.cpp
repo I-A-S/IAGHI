@@ -308,7 +308,7 @@ namespace ghi
   }
 
   auto VulkanBackend::create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets,
-                                             BindingLayout *out_layouts) -> Result<void>
+                                             Span<BindingLayout* const> out_layouts) -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
@@ -316,7 +316,7 @@ namespace ghi
     for (const auto &entries : entry_sets)
     {
       const auto layout = AU_TRY(VulkanBindingLayout::create(*dev, entries));
-      out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout)));
+      *out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout)));
     }
 
     return {};
@@ -334,16 +334,16 @@ namespace ghi
     }
   }
 
-  auto VulkanBackend::create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout, u32 count,
-                                               DescriptorTable *out_tables) -> Result<void>
+  auto VulkanBackend::create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout,
+                                               Span<DescriptorTable* const> out_tables) -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
-    for (u32 i = 0; i < count; i++)
+    for (u32 i = 0; i < out_tables.size(); i++)
     {
       const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
       const auto table = AU_TRY(VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl));
-      out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table)));
+      *out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table)));
     }
 
     return {};

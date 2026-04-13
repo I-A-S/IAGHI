@@ -25,7 +25,7 @@ namespace ghi
     { BackendT::destroy_device(std::declval<Device>()) } -> std::same_as<void>;
 
     {
-      BackendT::create_buffers(std::declval<Device>(), std::declval<Span<const BufferDesc>>(), std::declval<Buffer *>())
+      BackendT::create_buffers(std::declval<Device>(), std::declval<Span<const BufferDesc>>(), std::declval<Span<Buffer* const>>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_buffers(std::declval<Device>(), std::declval<Span<const Buffer>>()) } -> std::same_as<void>;
     { BackendT::map_frame_bound_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void *>;
@@ -33,7 +33,7 @@ namespace ghi
     { BackendT::unmap_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void>;
 
     {
-      BackendT::create_images(std::declval<Device>(), std::declval<Span<const ImageDesc>>(), std::declval<Image *>())
+      BackendT::create_images(std::declval<Device>(), std::declval<Span<const ImageDesc>>(), std::declval<Span<Image* const>>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_images(std::declval<Device>(), std::declval<Span<const Image>>()) } -> std::same_as<void>;
     {
@@ -43,21 +43,21 @@ namespace ghi
 
     {
       BackendT::create_samplers(std::declval<Device>(), std::declval<Span<const SamplerDesc>>(),
-                                std::declval<Sampler *>())
+                                std::declval<Span<Sampler* const>>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_samplers(std::declval<Device>(), std::declval<Span<const Sampler>>()) } -> std::same_as<void>;
 
     {
       BackendT::create_binding_layouts(std::declval<Device>(), std::declval<Span<const Span<const BindingLayoutEntry>>>(),
-                                       std::declval<BindingLayout *>())
+                                       std::declval<Span<BindingLayout* const>>())
     } -> std::same_as<Result<void>>;
     {
       BackendT::destroy_binding_layouts(std::declval<Device>(), std::declval<Span<const BindingLayout>>())
     } -> std::same_as<void>;
 
     {
-      BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<bool>, std::declval<BindingLayout>(), std::declval<u32>(),
-                                         std::declval<DescriptorTable *>())
+      BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<bool>, std::declval<BindingLayout>(),
+                                         std::declval<Span<DescriptorTable* const>>())
     } -> std::same_as<Result<void>>;
     {
       BackendT::update_descriptor_tables(std::declval<Device>(), std::declval<Span<const DescriptorUpdate>>())

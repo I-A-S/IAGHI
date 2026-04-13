@@ -49,7 +49,7 @@ namespace ghi::utils
         .usage = EBufferUsage::TransferSrc,
         .cpu_visible = true,
     };
-    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, &g_staging_buffer));
+    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, {&g_staging_buffer}));
 
     return {};
   }
@@ -63,13 +63,13 @@ namespace ghi::utils
         .usage = EBufferUsage::TransferSrc,
         .cpu_visible = true,
     };
-    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, &g_staging_buffer));
+    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, {&g_staging_buffer}));
 
     ghi::SamplerDesc sampler_desc{
         .linear_filter = false,
         .repeat_uv = true,
     };
-    AU_TRY_DISCARD(ghi::create_samplers(device, {sampler_desc}, &g_default_sampler));
+    AU_TRY_DISCARD(ghi::create_samplers(device, {sampler_desc}, {&g_default_sampler}));
 
     { // Default Image
       const u32 width = 32;
@@ -132,7 +132,7 @@ namespace ghi::utils
         .usage = usage,
         .cpu_visible = false,
     };
-    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, &buffer));
+    AU_TRY_DISCARD(ghi::create_buffers(device, {buffer_desc}, {&buffer}));
 
     if (!initial_data)
       return buffer;
@@ -181,7 +181,7 @@ namespace ghi::utils
         .array_layers = 1,         // [IATODO]
         .type = ETextureType::_2D, // [IATODO]
     };
-    AU_TRY_DISCARD(ghi::create_images(device, {desc}, &image));
+    AU_TRY_DISCARD(ghi::create_images(device, {desc}, {&image}));
 
     AU_TRY_DISCARD(ghi::upload_image_data(device, {image}, {rgba_data}, false));
 

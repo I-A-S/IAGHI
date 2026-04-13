@@ -81,7 +81,7 @@ namespace ghi
     m_handle = VK_NULL_HANDLE;
   }
 
-  auto VulkanBackend::create_images(Device device, Span<const ImageDesc> descs, Image *out_handles) -> Result<void>
+  auto VulkanBackend::create_images(Device device, Span<const ImageDesc> descs, Span<Image* const> out_handles) -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
@@ -92,7 +92,7 @@ namespace ghi
           dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format), {desc.width, desc.height, desc.depth},
           VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT, desc.array_layers,
           desc.mip_levels)); // [IATODO]: Use ETextureType
-      out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image)));
+      *out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image)));
     }
 
     return {};
@@ -361,7 +361,7 @@ namespace ghi
     return {};
   }
 
-  auto VulkanBackend::create_samplers(Device device, Span<const SamplerDesc> descs, Sampler *out_handles)
+  auto VulkanBackend::create_samplers(Device device, Span<const SamplerDesc> descs, Span<Sampler* const> out_handles)
       -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
@@ -392,7 +392,7 @@ namespace ghi
       VkSampler samplerHandle;
       VK_CALL(vkCreateSampler(dev->get_handle(), &info, nullptr, &samplerHandle), "failed to create sampler");
 
-      out_handles[i] = reinterpret_cast<Sampler>(samplerHandle);
+      *out_handles[i] = reinterpret_cast<Sampler>(samplerHandle);
     }
 
     return {};
