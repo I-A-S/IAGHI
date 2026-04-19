@@ -81,13 +81,21 @@ Here is a conceptual overview of how to interact with the API:
         ghi::cmd_set_viewport(cmd, 0, 0, 1920.0f, 1080.0f);
         ghi::cmd_set_scissor(cmd, 0, 0, 1920, 1080);
         
-        ghi::cmd_bind_pipeline(cmd, my_graphics_pipeline);
+        ghi::cmd_begin_pipeline(cmd, main_pass_pipeline);
         
-        u64 offset = 0;
-        ghi::cmd_bind_vertex_buffers(cmd, 0, 1, &vertex_buffer, &offset);
-        ghi::cmd_bind_descriptor_table(cmd, 0, my_graphics_pipeline, my_descriptor_table);
+        ghi::cmd_bind_descriptor_table(cmd, 0, main_pass_pipeline, global_descriptor_table,
+                                   {});
+        ghi::cmd_bind_frame_bound_descriptor_table(cmd, 1, main_pass_pipeline,
+                                               per_frame_descriptor_table);
+
+        ghi::cmd_push_constants(cmd, main_pass_pipeline, 0, sizeof(pc), &pc);
         
-        ghi::cmd_draw(cmd, vertex_count, 1, 0, 0);
+        ghi::cmd_bind_vertex_buffers(cmd, 0, 1, {vertex_buffer}, {0});
+        ghi::cmd_bind_index_buffer(cmd, index_buffer, 0, true);
+
+        ghi::cmd_draw_indexed(cmd, index_count, 1, 0, 0, 0);
+        
+        ghi::cmd_end_pipeline(cmd, main_pass_pipeline);
     
         // Submits the command buffer and presents to the screen
         ghi::end_frame(device);
@@ -113,4 +121,4 @@ Issues and feature requests are very welcome! However, contributions to the core
 
 ## **License**
 
-Copyright (C) 2026 IAS. Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+Copyright © 2026 IASoft (PVT) LTD. Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
