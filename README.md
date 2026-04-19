@@ -60,7 +60,7 @@ Here is a conceptual overview of how to interact with the API:
         .cpu_visible = true,
         .debug_name = "Main VBO"
     };
-    ghi::create_buffers(device, 1, &vbo_desc, &vertex_buffer);
+    ghi::create_buffers(device, {vbo_desc}, {vertex_buffer});
     
     // Upload data
     void* mapped = ghi::map_buffer(device, vertex_buffer);
@@ -71,7 +71,7 @@ Here is a conceptual overview of how to interact with the API:
 3. The Render Loop
 
 ```c++
-    ghi::set_clear_color(0.1f, 0.1f, 0.1f, 1.0f);
+    ghi::set_clear_color(device, 0.1f, 0.1f, 0.1f);
 
     while (!window_should_close)
     {
