@@ -3,7 +3,7 @@
   <br/>
   <br/>
 
-  <img src="https://img.shields.io/badge/license-apache_v2-darkblue.svg" alt="License"/>
+  <img src="https://img.shields.io/badge/license-Apache_v2-darkblue.svg" alt="License"/>
   <img src="https://img.shields.io/badge/standard-C%2B%2B20-darkred.svg" alt="C++ Standard"/>
   <img src="https://img.shields.io/badge/compiler-MSVC | Clang-darkgreen.svg" alt="Compiler"/>
 

@@ -62,6 +62,7 @@
     {
       "name": "IAGHI-x64-windows",
       "displayName": "IAGHI Windows x64 (Visual Studio 2022)",
+      "generator": "Visual Studio 18 2026",
       "inherits": "x64-windows",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "cacheVariables": {

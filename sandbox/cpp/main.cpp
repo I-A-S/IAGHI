@@ -95,15 +95,15 @@ void main()
       return fail("failed to create SDL window '%s'", SDL_GetError());
 
     init_info.surface_creation_callback_user_data = window;
-    const auto device = AU_TRY(ghi::create_device(init_info));
+    AU_TRY_VAR(const device, ghi::create_device(init_info));
 
     AU_TRY_DISCARD(ghi::utils::initialize(device));
 
     ghi::set_clear_color(device, 100.0f / 255.0f, 149.0f / 255.0f, 237.0f / 255.0f, 1.0f);
 
-    const auto vertex_shader = AU_TRY(utils::create_shader_from_glsl(device, VERTEX_SHADER_SRC, EShaderStage::Vertex));
-    const auto fragment_shader =
-        AU_TRY(utils::create_shader_from_glsl(device, FRAGMENT_SHADER_SRC, EShaderStage::Fragment));
+    AU_TRY_VAR(const vertex_shader, utils::create_shader_from_glsl(device, VERTEX_SHADER_SRC, EShaderStage::Vertex));
+    AU_TRY_VAR(const fragment_shader,
+               utils::create_shader_from_glsl(device, FRAGMENT_SHADER_SRC, EShaderStage::Fragment));
 
     VertexInputBinding vertex_input_binding{
         .binding = 0,
@@ -163,7 +163,7 @@ void main()
                                   (EShaderStage) ((u32) EShaderStage::Vertex | (u32) EShaderStage::Fragment)},
             },
     };
-    const auto pipeline = AU_TRY(ghi::create_graphics_pipeline(device, pipeline_desc));
+    AU_TRY_VAR(const pipeline, ghi::create_graphics_pipeline(device, pipeline_desc));
 
     ghi::Buffer ubo_global_data_buffer, ubo_per_frame_data_buffer;
     AU_TRY_DISCARD(ghi::create_buffers(device,
@@ -231,10 +231,9 @@ void main()
     };
     Vec<i32> indices = {0, 1, 2, 2, 3, 0};
 
-    Buffer vertex_buffer =
-        AU_TRY(ghi::utils::create_device_local_buffer(device, EBufferUsage::Vertex, sizeof(glm::vec4) * vertices.size(),
-                                                      vertices.data(), sizeof(glm::vec4) * vertices.size()));
-    Buffer index_buffer = AU_TRY(ghi::utils::create_device_local_buffer(
+    AU_TRY_VAR(vertex_buffer, ghi::utils::create_device_local_buffer(device, EBufferUsage::Vertex, sizeof(glm::vec4) * vertices.size(),
+                                                                     vertices.data(), sizeof(glm::vec4) * vertices.size()));
+    AU_TRY_VAR(index_buffer, ghi::utils::create_device_local_buffer(
         device, EBufferUsage::Index, sizeof(i32) * indices.size(), indices.data(), sizeof(i32) * indices.size()));
 
     SDL_ShowWindow(window);

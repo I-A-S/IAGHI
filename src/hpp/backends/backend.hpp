@@ -56,7 +56,7 @@ namespace ghi
     } -> std::same_as<void>;
 
     {
-      BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<bool>, std::declval<BindingLayout>(),
+      BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<bool>(), std::declval<BindingLayout>(),
                                          std::declval<Span<DescriptorTable* const>>())
     } -> std::same_as<Result<void>>;
     {
