@@ -137,8 +137,7 @@ namespace ghi
 
       const auto is_frame_bound = (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundUniform)) ||
                                   (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundStorage));
-      const auto buffer =
-          AU_TRY(VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
+          AU_TRY_VAR(buffer, VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
                                       is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name));
       *out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
     }

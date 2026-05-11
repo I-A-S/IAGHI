@@ -394,7 +394,7 @@ namespace ghi
 {
   auto VulkanBackend::create_device(const InitInfo &init_info) -> Result<Device>
   {
-    const auto device = AU_TRY(VulkanDevice::create(init_info));
+    AU_TRY_VAR(device, VulkanDevice::create(init_info));
     return reinterpret_cast<Device>(new VulkanDevice(std::move(device)));
   }
 

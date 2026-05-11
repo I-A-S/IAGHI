@@ -200,7 +200,8 @@ namespace ghi
     {
       bindings_layouts.push_back(reinterpret_cast<VulkanBindingLayout *>(desc.binding_layouts[i]));
     }
-    result.m_layout = AU_TRY(VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
+    AU_TRY_VAR(layout, VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
+    result.m_layout=std::move(layout);
 
     const auto vertex_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.vertex_shader);
     const auto fragment_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.fragment_shader);
@@ -404,7 +405,7 @@ namespace ghi
     u32 i{0};
     for (const auto &entries : entry_sets)
     {
-      const auto layout = AU_TRY(VulkanBindingLayout::create(*dev, entries));
+      AU_TRY_VAR(layout, VulkanBindingLayout::create(*dev, entries));
       *out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout)));
     }
 
@@ -431,7 +432,7 @@ namespace ghi
     for (u32 i = 0; i < out_tables.size(); i++)
     {
       const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
-      const auto table = AU_TRY(VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl));
+      AU_TRY_VAR(table, VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl));
       *out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table)));
     }
 
@@ -526,8 +527,7 @@ namespace ghi
       -> Result<Shader>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
-    const auto shader =
-        AU_TRY(VulkanShaderModule::create(*dev, Span(static_cast<const u32 *>(spirv_code), size >> 2),
+    AU_TRY_VAR(shader, VulkanShaderModule::create(*dev, Span(static_cast<const u32 *>(spirv_code), size >> 2),
                                           static_cast<VkShaderStageFlagBits>(map_shader_stage_enum_to_vk(stage))));
     return reinterpret_cast<Shader>(new VulkanShaderModule(std::move(shader)));
   }
@@ -546,7 +546,7 @@ namespace ghi
   auto VulkanBackend::create_graphics_pipeline(Device device, const GraphicsPipelineDesc &desc) -> Result<Pipeline>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
-    const auto pipeline = AU_TRY(VulkanGraphicsPipeline::create(*dev, desc));
+    AU_TRY_VAR(pipeline, VulkanGraphicsPipeline::create(*dev, desc));
     return reinterpret_cast<Pipeline>(new VulkanGraphicsPipeline(std::move(pipeline)));
   }
 

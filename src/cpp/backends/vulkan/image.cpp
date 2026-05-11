@@ -88,7 +88,7 @@ namespace ghi
     u32 i{0};
     for (const auto &desc : descs)
     {
-      const auto image = AU_TRY(VulkanImage::create(
+      AU_TRY_VAR(image, VulkanImage::create(
           dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format), {desc.width, desc.height, desc.depth},
           VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT, desc.array_layers,
           desc.mip_levels)); // [IATODO]: Use ETextureType

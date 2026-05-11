@@ -131,9 +131,9 @@ namespace ghi
     if (!result.m_surface)
       return fail("failed to create vulkan surface");
 
-    const auto [pd, props] = AU_TRY(result.select_physical_device());
-    result.m_physical_device = pd;
-    result.m_physical_device_properties = props;
+    AU_TRY_VAR(pd_data, result.select_physical_device());
+    result.m_physical_device = pd_data.first;
+    result.m_physical_device_properties = pd_data.second;
 
     Vec<VkDeviceQueueCreateInfo> device_queue_create_infos;
 
@@ -291,7 +291,10 @@ namespace ghi
     VK_CALL(vkCreateFence(result.m_handle, &fence_create_info, nullptr, &result.m_single_time_command_fence),
             "Creating single time command fence");
 
-    result.m_swapchain = AU_TRY(VulkanSwapchain::create(result, init_info.surface_width, init_info.surface_height));
+
+
+    AU_TRY_VAR(swapchain, VulkanSwapchain::create(result, init_info.surface_width, init_info.surface_height));
+    result.m_swapchain=swapchain;
 
     VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
                                          {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},

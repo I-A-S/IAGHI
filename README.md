@@ -3,10 +3,8 @@
   <br/>
   <br/>
 
-  <img src="https://img.shields.io/badge/license-apache_v2-blue.svg" alt="License"/>
-  <img src="https://img.shields.io/badge/platform-Auxid-yellow.svg" alt="Platform"/>
-  <img src="https://img.shields.io/badge/standard-C%2B%2B20-green.svg" alt="C++ Standard"/>
-  <img src="https://img.shields.io/badge/compiler-clang_only-red.svg" alt="Compiler"/>
+  <img src="https://img.shields.io/badge/license-apache_v2-darkblue.svg" alt="License"/>
+  <img src="https://img.shields.io/badge/compiler-MSVC | Clang-darkgreen.svg" alt="Compiler"/>
 
   <p style="padding-top: 0.2rem;">
     <b>IAGHI: IA Graphics Hardware Interface</b>

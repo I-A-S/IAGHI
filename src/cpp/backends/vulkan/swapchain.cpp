@@ -182,10 +182,11 @@ namespace ghi
           vkCreateSemaphore(device.m_handle, &semaphore_create_info, nullptr, &m_frames[i].image_available_semaphore),
           "Creating swapchain semaphore");
 
-      m_frames[i].depth_image =
-          AU_TRY(VulkanImage::create(device.m_handle, device.m_allocator, m_depth_format,
+       
+          AU_TRY_VAR(depth_image, VulkanImage::create(device.m_handle, device.m_allocator, m_depth_format,
                                      {.width = m_extent.width, .height = m_extent.height, .depth = 1},
                                      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT));
+          m_frames[i].depth_image=std::move(depth_image);
     }
 
     Vec<ImageBarrier> depth_barriers;

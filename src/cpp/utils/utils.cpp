@@ -103,8 +103,10 @@ namespace ghi::utils
         }
       }
 
-      g_default_image = AU_TRY(create_image_from_rgba(device, width, height, rgba_data.data(), EFormat::R8G8B8A8Unorm));
-    }
+
+       AU_TRY_VAR(img, create_image_from_rgba(device, width, height, rgba_data.data(), EFormat::R8G8B8A8Unorm));
+       g_default_image=img;
+      }
 
     return {};
   }
