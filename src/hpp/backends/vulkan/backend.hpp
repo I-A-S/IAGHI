@@ -32,7 +32,7 @@
 
 #define VK_ENUM_CALL(call, result, ...)                                                                                \
   {                                                                                                                    \
-    UINT32 __count;                                                                                                    \
+    u32 __count;                                                                                                    \
     call(__VA_ARGS__, &__count, nullptr);                                                                              \
     result.resize(__count);                                                                                            \
     call(__VA_ARGS__, &__count, result.data());                                                                        \

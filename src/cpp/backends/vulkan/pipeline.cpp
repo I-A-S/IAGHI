@@ -305,7 +305,7 @@ namespace ghi
     VkGraphicsPipelineCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &rendering_info,
-        .stageCount = _countof(shader_stages),
+        .stageCount = static_cast<u32>(std::size(shader_stages)),
         .pStages = shader_stages,
         .pVertexInputState = &vertex_input_info,
         .pInputAssemblyState = &input_assembly,
@@ -527,7 +527,7 @@ namespace ghi
       -> Result<Shader>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
-    AU_TRY_VAR(shader, VulkanShaderModule::create(*dev, Span(static_cast<const u32 *>(spirv_code), size >> 2),
+    AU_TRY_VAR(shader, VulkanShaderModule::create(*dev, Span<const u32>(static_cast<const u32 *>(spirv_code), size >> 2),
                                           static_cast<VkShaderStageFlagBits>(map_shader_stage_enum_to_vk(stage))));
     return reinterpret_cast<Shader>(new VulkanShaderModule(std::move(shader)));
   }
