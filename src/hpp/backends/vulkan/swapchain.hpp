@@ -1,5 +1,7 @@
 // IAGHI: IA Graphics Hardware Interface
-// Copyright (C) 2026 IAS (ias@iasoft.dev)
+//
+// Copyright (C) 2026 I-A-S (ias@iasoft.dev)
+// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +38,7 @@ public:
       VkImageView swapchain_image_view;
 
       VulkanImage depth_image;
+      VulkanImage offscreen_color_image;
     };
 
 public:

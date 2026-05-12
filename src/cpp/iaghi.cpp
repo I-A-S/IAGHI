@@ -1,5 +1,7 @@
 // IAGHI: IA Graphics Hardware Interface
-// Copyright (C) 2026 IAS (ias@iasoft.dev)
+//
+// Copyright (C) 2026 I-A-S (ias@iasoft.dev)
+// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,6 +157,11 @@ namespace ghi
   auto get_active_frame_index(Device device) -> u32
   {
     return VulkanBackend::get_active_frame_index(device);
+  }
+
+  auto copy_backbuffer_to_cpu(Device device, Span<u8> out_data) -> Result<void>
+  {
+    return VulkanBackend::copy_backbuffer_to_cpu(device, out_data);
   }
 
   auto wait_idle(Device device) -> void

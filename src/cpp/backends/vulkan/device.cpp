@@ -1,5 +1,7 @@
 // IAGHI: IA Graphics Hardware Interface
-// Copyright (C) 2026 IAS (ias@iasoft.dev)
+//
+// Copyright (C) 2026 I-A-S (ias@iasoft.dev)
+// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,18 +28,23 @@ namespace ghi
   {
     VulkanDevice result{};
 
-    result.m_instance_extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+    bool is_offscreen = init_info.surface_creation_callback == nullptr;
+
+    if (!is_offscreen)
+    {
+      result.m_instance_extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
 #if AU_PLATFORM_WINDOWS
-    result.m_instance_extensions.push_back("VK_KHR_win32_surface");
+      result.m_instance_extensions.push_back("VK_KHR_win32_surface");
 #elif AU_PLATFORM_ANDROID
-    result.m_instance_extensions.push_back("VK_KHR_android_surface");
+      result.m_instance_extensions.push_back("VK_KHR_android_surface");
 #elif AU_PLATFORM_LINUX
-    result.m_instance_extensions.push_back("VK_KHR_xcb_surface");
-    result.m_instance_extensions.push_back("VK_KHR_xlib_surface");
+      result.m_instance_extensions.push_back("VK_KHR_xcb_surface");
+      result.m_instance_extensions.push_back("VK_KHR_xlib_surface");
 #endif
 
-    result.m_device_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+      result.m_device_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
 
     bool validation_enabled = init_info.validation_enabled;
 
@@ -126,10 +133,17 @@ namespace ghi
         logger.warn("failed to set up debug messenger");
     }
 
-    result.m_surface = static_cast<VkSurfaceKHR>(
-        init_info.surface_creation_callback(result.m_instance, init_info.surface_creation_callback_user_data));
-    if (!result.m_surface)
-      return fail("failed to create vulkan surface");
+    if (!is_offscreen)
+    {
+      result.m_surface = static_cast<VkSurfaceKHR>(
+          init_info.surface_creation_callback(result.m_instance, init_info.surface_creation_callback_user_data));
+      if (!result.m_surface)
+        return fail("failed to create vulkan surface");
+    }
+    else
+    {
+      result.m_surface = VK_NULL_HANDLE;
+    }
 
     AU_TRY_VAR(pd_data, result.select_physical_device());
     result.m_physical_device = pd_data.first;
@@ -339,7 +353,7 @@ namespace ghi
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-    const VkSubmitInfo submit_info{
+    VkSubmitInfo submit_info{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &sync_frame.image_available_semaphore,
@@ -349,6 +363,18 @@ namespace ghi
         .signalSemaphoreCount = 1,
         .pSignalSemaphores = &image_frame.render_finished_semaphore,
     };
+
+    if (sync_frame.image_available_semaphore == VK_NULL_HANDLE)
+    {
+      submit_info.waitSemaphoreCount = 0;
+      submit_info.pWaitSemaphores = nullptr;
+    }
+
+    if (image_frame.render_finished_semaphore == VK_NULL_HANDLE)
+    {
+      submit_info.signalSemaphoreCount = 0;
+      submit_info.pSignalSemaphores = nullptr;
+    }
 
     if (vkQueueSubmit(m_graphics_queue, 1, &submit_info, fence) != VK_SUCCESS)
       return false;
@@ -438,7 +464,10 @@ namespace ghi
       for (u32 i = 0; i < queue_count; i++)
       {
         VkBool32 supports_present = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, m_surface, &supports_present);
+        if (m_surface != VK_NULL_HANDLE)
+          vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, m_surface, &supports_present);
+        else
+          supports_present = VK_TRUE;
 
         if ((queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && supports_present)
         {

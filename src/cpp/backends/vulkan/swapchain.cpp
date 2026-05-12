@@ -1,5 +1,7 @@
 // IAGHI: IA Graphics Hardware Interface
-// Copyright (C) 2026 IAS (ias@iasoft.dev)
+//
+// Copyright (C) 2026 I-A-S (ias@iasoft.dev)
+// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,27 +26,38 @@ namespace ghi
 
     result.m_depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
 
-    VkSurfaceFormatKHR selected_surface_format{};
-    Vec<VkSurfaceFormatKHR> surface_formats;
-    VK_ENUM_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR, surface_formats, device.m_physical_device, device.m_surface);
-    for (const auto &format : surface_formats)
+    if (device.m_surface != VK_NULL_HANDLE)
     {
-      selected_surface_format = format;
-      if (format.format == VK_FORMAT_B8G8R8A8_SRGB)
-        break;
-    }
-    result.m_format = selected_surface_format.format;
-    result.m_colorspace = selected_surface_format.colorSpace;
+      VkSurfaceFormatKHR selected_surface_format{};
+      Vec<VkSurfaceFormatKHR> surface_formats;
+      VK_ENUM_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR, surface_formats, device.m_physical_device, device.m_surface);
+      for (const auto &format : surface_formats)
+      {
+        selected_surface_format = format;
+        if (format.format == VK_FORMAT_B8G8R8A8_SRGB)
+          break;
+      }
+      result.m_format = selected_surface_format.format;
+      result.m_colorspace = selected_surface_format.colorSpace;
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    VK_CALL(
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.m_physical_device, device.m_surface, &surface_capabilities),
-        "Fetching surface capabilities");
-    result.m_buffer_count = std::max(NUM_FRAMES_BUFFERED, surface_capabilities.minImageCount);
-    if (surface_capabilities.maxImageCount > 0)
-      result.m_buffer_count = std::min(result.m_buffer_count, surface_capabilities.maxImageCount);
-    result.m_min_extent = surface_capabilities.minImageExtent;
-    result.m_max_extent = surface_capabilities.maxImageExtent;
+      VkSurfaceCapabilitiesKHR surface_capabilities;
+      VK_CALL(
+          vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.m_physical_device, device.m_surface, &surface_capabilities),
+          "Fetching surface capabilities");
+      result.m_buffer_count = std::max(NUM_FRAMES_BUFFERED, surface_capabilities.minImageCount);
+      if (surface_capabilities.maxImageCount > 0)
+        result.m_buffer_count = std::min(result.m_buffer_count, surface_capabilities.maxImageCount);
+      result.m_min_extent = surface_capabilities.minImageExtent;
+      result.m_max_extent = surface_capabilities.maxImageExtent;
+    }
+    else
+    {
+      result.m_format = VK_FORMAT_R8G8B8A8_UNORM;
+      result.m_colorspace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      result.m_buffer_count = NUM_FRAMES_BUFFERED;
+      result.m_min_extent = {1, 1};
+      result.m_max_extent = {8192, 8192};
+    }
 
     VkFenceCreateInfo fence_create_info{};
     fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -83,6 +96,8 @@ namespace ghi
 
     result.m_handle = VK_NULL_HANDLE;
 
+    result.m_extent = {width, height};
+
     AU_TRY_DISCARD(result.recreate(device));
 
     return result;
@@ -94,14 +109,27 @@ namespace ghi
 
     for (auto &frame : m_frames)
     {
-      frame.depth_image.destroy(device.m_handle, device.m_allocator);
-      vkDestroySemaphore(device.m_handle, frame.render_finished_semaphore, nullptr);
+      if (frame.depth_image.get_handle() != VK_NULL_HANDLE)
+        frame.depth_image.destroy(device.m_handle, device.m_allocator);
+        
+      if (device.m_surface == VK_NULL_HANDLE && frame.offscreen_color_image.get_handle() != VK_NULL_HANDLE)
+        frame.offscreen_color_image.destroy(device.m_handle, device.m_allocator);
+
+      if (frame.render_finished_semaphore != VK_NULL_HANDLE)
+        vkDestroySemaphore(device.m_handle, frame.render_finished_semaphore, nullptr);
+        
       vkDestroyFence(device.m_handle, frame.in_use_fence, nullptr);
       vkDestroyCommandPool(device.m_handle, frame.command_pool, nullptr);
-      vkDestroyImageView(device.m_handle, frame.swapchain_image_view, nullptr);
-      vkDestroySemaphore(device.m_handle, frame.image_available_semaphore, nullptr);
+      
+      if (device.m_surface != VK_NULL_HANDLE && frame.swapchain_image_view != VK_NULL_HANDLE)
+        vkDestroyImageView(device.m_handle, frame.swapchain_image_view, nullptr);
+        
+      if (frame.image_available_semaphore != VK_NULL_HANDLE)
+        vkDestroySemaphore(device.m_handle, frame.image_available_semaphore, nullptr);
     }
-    vkDestroySwapchainKHR(device.m_handle, m_handle, nullptr);
+    
+    if (m_handle != VK_NULL_HANDLE)
+      vkDestroySwapchainKHR(device.m_handle, m_handle, nullptr);
   }
 
   auto VulkanSwapchain::recreate(VulkanDevice &device) -> Result<void>
@@ -114,73 +142,114 @@ namespace ghi
     {
       for (i32 i = 0; i < m_buffer_count; i++)
       {
-        vkDestroyImageView(device.m_handle, m_frames[i].swapchain_image_view, nullptr);
-        vkDestroySemaphore(device.m_handle, m_frames[i].image_available_semaphore, nullptr);
-        m_frames[i].depth_image.destroy(device.m_handle, device.m_allocator);
+        if (m_frames[i].swapchain_image_view != VK_NULL_HANDLE)
+          vkDestroyImageView(device.m_handle, m_frames[i].swapchain_image_view, nullptr);
+        if (m_frames[i].image_available_semaphore != VK_NULL_HANDLE)
+          vkDestroySemaphore(device.m_handle, m_frames[i].image_available_semaphore, nullptr);
+        if (m_frames[i].depth_image.get_handle() != VK_NULL_HANDLE)
+          m_frames[i].depth_image.destroy(device.m_handle, device.m_allocator);
+      }
+    }
+    else if (device.m_surface == VK_NULL_HANDLE)
+    {
+      for (i32 i = 0; i < m_buffer_count; i++)
+      {
+        if (m_frames[i].image_available_semaphore != VK_NULL_HANDLE)
+          vkDestroySemaphore(device.m_handle, m_frames[i].image_available_semaphore, nullptr);
+        if (m_frames[i].depth_image.get_handle() != VK_NULL_HANDLE)
+          m_frames[i].depth_image.destroy(device.m_handle, device.m_allocator);
+        if (m_frames[i].offscreen_color_image.get_handle() != VK_NULL_HANDLE)
+          m_frames[i].offscreen_color_image.destroy(device.m_handle, device.m_allocator);
       }
     }
 
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-    VK_CALL(
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.m_physical_device, device.m_surface, &surface_capabilities),
-        "Fetching surface capabilities");
-    m_buffer_count = std::max(NUM_FRAMES_BUFFERED, surface_capabilities.minImageCount);
-    if (surface_capabilities.maxImageCount > 0)
-      m_buffer_count = std::min(m_buffer_count, surface_capabilities.maxImageCount);
-    m_min_extent = surface_capabilities.minImageExtent;
-    m_max_extent = surface_capabilities.maxImageExtent;
+    if (device.m_surface != VK_NULL_HANDLE)
+    {
+      VkSurfaceCapabilitiesKHR surface_capabilities;
+      VK_CALL(
+          vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.m_physical_device, device.m_surface, &surface_capabilities),
+          "Fetching surface capabilities");
+      m_buffer_count = std::max(NUM_FRAMES_BUFFERED, surface_capabilities.minImageCount);
+      if (surface_capabilities.maxImageCount > 0)
+        m_buffer_count = std::min(m_buffer_count, surface_capabilities.maxImageCount);
+      m_min_extent = surface_capabilities.minImageExtent;
+      m_max_extent = surface_capabilities.maxImageExtent;
+    }
     m_extent.width = std::min(std::max(m_extent.width, m_min_extent.width), m_max_extent.width);
     m_extent.height = std::min(std::max(m_extent.height, m_min_extent.height), m_max_extent.height);
 
     VkSwapchainCreateInfoKHR create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.oldSwapchain = m_handle;
-    create_info.surface = device.m_surface;
-    create_info.imageFormat = m_format;
-    create_info.imageColorSpace = m_colorspace;
-    create_info.imageArrayLayers = 1;
-    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    create_info.queueFamilyIndexCount = 1;
-    create_info.pQueueFamilyIndices = &device.m_graphics_queue_family_index;
-    create_info.minImageCount = m_buffer_count;
-    create_info.imageExtent = m_extent;
-    create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-    VK_CALL(vkCreateSwapchainKHR(device.m_handle, &create_info, nullptr, &m_handle), "Creating swapchain");
-    vkDestroySwapchainKHR(device.m_handle, create_info.oldSwapchain, nullptr);
-
-    Vec<VkImage> swapchain_images;
-    VK_ENUM_CALL(vkGetSwapchainImagesKHR, swapchain_images, device.m_handle, m_handle);
-    i32 frame_index{0};
-    for (const auto &img : swapchain_images)
+    if (device.m_surface != VK_NULL_HANDLE)
     {
-      VkImageView view{};
+      create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+      create_info.oldSwapchain = m_handle;
+      create_info.surface = device.m_surface;
+      create_info.imageFormat = m_format;
+      create_info.imageColorSpace = m_colorspace;
+      create_info.imageArrayLayers = 1;
+      create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+      create_info.queueFamilyIndexCount = 1;
+      create_info.pQueueFamilyIndices = &device.m_graphics_queue_family_index;
+      create_info.minImageCount = m_buffer_count;
+      create_info.imageExtent = m_extent;
+      create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+      create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
-      VkImageViewCreateInfo view_create_info{};
-      view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-      view_create_info.image = img;
-      view_create_info.format = m_format;
-      view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-      view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      view_create_info.subresourceRange.baseArrayLayer = 0;
-      view_create_info.subresourceRange.baseMipLevel = 0;
-      view_create_info.subresourceRange.layerCount = 1;
-      view_create_info.subresourceRange.levelCount = 1;
-      VK_CALL(vkCreateImageView(device.m_handle, &view_create_info, nullptr, &view), "Creating swapchain image view");
+      VK_CALL(vkCreateSwapchainKHR(device.m_handle, &create_info, nullptr, &m_handle), "Creating swapchain");
+      vkDestroySwapchainKHR(device.m_handle, create_info.oldSwapchain, nullptr);
 
-      m_frames[frame_index].swapchain_image = img;
-      m_frames[frame_index++].swapchain_image_view = view;
+      Vec<VkImage> swapchain_images;
+      VK_ENUM_CALL(vkGetSwapchainImagesKHR, swapchain_images, device.m_handle, m_handle);
+      i32 frame_index{0};
+      for (const auto &img : swapchain_images)
+      {
+        VkImageView view{};
+
+        VkImageViewCreateInfo view_create_info{};
+        view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_create_info.image = img;
+        view_create_info.format = m_format;
+        view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        view_create_info.subresourceRange.baseArrayLayer = 0;
+        view_create_info.subresourceRange.baseMipLevel = 0;
+        view_create_info.subresourceRange.layerCount = 1;
+        view_create_info.subresourceRange.levelCount = 1;
+        VK_CALL(vkCreateImageView(device.m_handle, &view_create_info, nullptr, &view), "Creating swapchain image view");
+
+        m_frames[frame_index].swapchain_image = img;
+        m_frames[frame_index++].swapchain_image_view = view;
+      }
+    }
+    else
+    {
+      for (u32 i = 0; i < m_buffer_count; ++i)
+      {
+        AU_TRY_VAR(color_image, VulkanImage::create(device.m_handle, device.m_allocator, m_format,
+                                                    {.width = m_extent.width, .height = m_extent.height, .depth = 1},
+                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+        
+        m_frames[i].offscreen_color_image = std::move(color_image);
+        m_frames[i].swapchain_image = m_frames[i].offscreen_color_image.get_handle();
+        m_frames[i].swapchain_image_view = m_frames[i].offscreen_color_image.get_view();
+      }
     }
 
     VkSemaphoreCreateInfo semaphore_create_info{};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     for (i32 i = 0; i < m_buffer_count; i++)
     {
-      VK_CALL(
-          vkCreateSemaphore(device.m_handle, &semaphore_create_info, nullptr, &m_frames[i].image_available_semaphore),
-          "Creating swapchain semaphore");
+      if (device.m_surface != VK_NULL_HANDLE)
+      {
+        VK_CALL(
+            vkCreateSemaphore(device.m_handle, &semaphore_create_info, nullptr, &m_frames[i].image_available_semaphore),
+            "Creating swapchain semaphore");
+      }
+      else
+      {
+        m_frames[i].image_available_semaphore = VK_NULL_HANDLE;
+      }
 
        
           AU_TRY_VAR(depth_image, VulkanImage::create(device.m_handle, device.m_allocator, m_depth_format,
@@ -220,21 +289,28 @@ namespace ghi
 
     vkWaitForFences(device.m_handle, 1, &frame.in_use_fence, VK_TRUE, UINT64_MAX);
 
-    u32 image_index{};
-    const auto result = vkAcquireNextImageKHR(device.m_handle, m_handle, UINT64_MAX, frame.image_available_semaphore,
-                                              VK_NULL_HANDLE, &image_index);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    if (device.m_surface != VK_NULL_HANDLE)
     {
-      (void) recreate(device);
-      return false;
+      u32 image_index{};
+      const auto result = vkAcquireNextImageKHR(device.m_handle, m_handle, UINT64_MAX, frame.image_available_semaphore,
+                                                VK_NULL_HANDLE, &image_index);
+      if (result == VK_ERROR_OUT_OF_DATE_KHR)
+      {
+        (void) recreate(device);
+        return false;
+      }
+
+      if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        return false;
+
+      m_current_frame_index = image_index;
+    }
+    else
+    {
+      m_current_frame_index = (m_current_frame_index + 1) % m_buffer_count;
     }
 
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-      return false;
-
     vkResetFences(device.m_handle, 1, &frame.in_use_fence);
-
-    m_current_frame_index = image_index;
 
     return true;
   }
@@ -243,15 +319,21 @@ namespace ghi
   {
     const auto &image_frame = m_frames[m_current_frame_index];
 
-    VkPresentInfoKHR present_info{};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.pImageIndices = &m_current_frame_index;
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = &m_handle;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &image_frame.render_finished_semaphore;
+    if (device.m_surface != VK_NULL_HANDLE)
+    {
+      VkPresentInfoKHR present_info{};
+      present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+      present_info.pImageIndices = &m_current_frame_index;
+      present_info.swapchainCount = 1;
+      present_info.pSwapchains = &m_handle;
+      if (image_frame.render_finished_semaphore != VK_NULL_HANDLE)
+      {
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &image_frame.render_finished_semaphore;
+      }
 
-    vkQueuePresentKHR(device.m_graphics_queue, &present_info);
+      vkQueuePresentKHR(device.m_graphics_queue, &present_info);
+    }
 
     m_current_sync_frame_index = (m_current_sync_frame_index + 1) % m_buffer_count;
   }

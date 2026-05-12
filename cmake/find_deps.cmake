@@ -68,7 +68,7 @@ if(IAGHI_BUILD_UTILS)
     FetchContent_MakeAvailable(glslang)
 endif ()
 
-if(IAGHI_BUILD_SANDBOX)
+if(IAGHI_BUILD_SANDBOX OR IAGHI_BUILD_EXAMPLES)
     FetchContent_Declare(
             SDL
             GIT_REPOSITORY https://github.com/libsdl-org/SDL

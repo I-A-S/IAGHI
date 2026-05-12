@@ -1,5 +1,7 @@
 // IAGHI: IA Graphics Hardware Interface
-// Copyright (C) 2026 IAS (ias@iasoft.dev)
+//
+// Copyright (C) 2026 I-A-S (ias@iasoft.dev)
+// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -84,6 +86,8 @@ public:
     static auto begin_frame(Device device) -> CommandBuffer;
     static auto end_frame(Device device) -> void;
     static auto get_active_frame_index(Device device) -> u32;
+
+    static auto copy_backbuffer_to_cpu(Device device, Span<u8> out_data) -> Result<void>;
 
     static auto wait_idle(Device device) -> void;
     static auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;

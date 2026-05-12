@@ -1,5 +1,7 @@
 // IAGHI: IA Graphics Hardware Interface
-// Copyright (C) 2026 IAS (ias@iasoft.dev)
+//
+// Copyright (C) 2026 I-A-S (ias@iasoft.dev)
+// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -487,10 +489,10 @@ namespace ghi
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+        .dstStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .newLayout = dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .image = dev->m_swapchain.m_frames[dev->m_swapchain.m_current_frame_index].swapchain_image,
         .subresourceRange =
             {
@@ -524,6 +526,105 @@ namespace ghi
   auto VulkanBackend::wait_idle(Device device) -> void
   {
     reinterpret_cast<VulkanDevice *>(device)->wait_idle();
+  }
+
+  auto VulkanBackend::copy_backbuffer_to_cpu(Device device, Span<u8> out_data) -> Result<void>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    dev->wait_idle();
+
+    VkImage color_img;
+    VkImage depth_img;
+    dev->get_swapchain().get_backbuffer_images(color_img, depth_img);
+
+    const auto extent = dev->get_swapchain().get_extent();
+    const u32 format_size = get_format_byte_size(map_vk_to_format_enum(dev->get_swapchain().get_color_format()));
+    const u64 expected_size = static_cast<u64>(extent.width) * static_cast<u64>(extent.height) * format_size;
+    
+    if (out_data.size() < expected_size)
+        return fail("Output buffer is too small for backbuffer copy");
+
+    VkBufferCreateInfo buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = expected_size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+    VkBuffer staging_buffer;
+    VmaAllocation staging_allocation;
+    VmaAllocationInfo staging_alloc_info;
+    VK_CALL(vmaCreateBuffer(dev->get_allocator(), &buffer_info, &alloc_info, &staging_buffer, &staging_allocation, &staging_alloc_info), "Creating staging buffer");
+
+    AU_TRY_DISCARD(dev->execute_single_time_commands([&](VkCommandBuffer cmd) {
+      VkImageMemoryBarrier2 barrier = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+          .srcStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+          .srcAccessMask = 0,
+          .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+          .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+          .oldLayout = dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+          .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+          .image = color_img,
+          .subresourceRange = {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseMipLevel = 0,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+          },
+      };
+      
+      VkDependencyInfo dep_info = {
+          .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+          .imageMemoryBarrierCount = 1,
+          .pImageMemoryBarriers = &barrier,
+      };
+      vkCmdPipelineBarrier2(cmd, &dep_info);
+
+      VkBufferImageCopy copy_region = {
+          .bufferOffset = 0,
+          .bufferRowLength = 0,
+          .bufferImageHeight = 0,
+          .imageSubresource = {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .mipLevel = 0,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+          },
+          .imageOffset = {0, 0, 0},
+          .imageExtent = {extent.width, extent.height, 1},
+      };
+
+      vkCmdCopyImageToBuffer(cmd, color_img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging_buffer, 1, &copy_region);
+
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+      barrier.dstStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.dstAccessMask = 0;
+      barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+      barrier.newLayout = dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+      
+      vkCmdPipelineBarrier2(cmd, &dep_info);
+    }));
+
+    if (staging_alloc_info.pMappedData)
+    {
+      memcpy(out_data.data(), staging_alloc_info.pMappedData, expected_size);
+    }
+    else
+    {
+      void* mapped_data;
+      vmaMapMemory(dev->get_allocator(), staging_allocation, &mapped_data);
+      memcpy(out_data.data(), mapped_data, expected_size);
+      vmaUnmapMemory(dev->get_allocator(), staging_allocation);
+    }
+
+    vmaDestroyBuffer(dev->get_allocator(), staging_buffer, staging_allocation);
+
+    return {};
   }
 
   auto VulkanBackend::set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a) -> void

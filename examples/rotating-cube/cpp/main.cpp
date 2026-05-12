@@ -25,23 +25,20 @@
 #include <SDL3/SDL_vulkan.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace ghi
 {
   const auto VERTEX_SHADER_SRC = R"(
 #version 460
-layout(location = 0) in vec2 inPosition;
-layout(location = 1) in vec2 inTexCoord;
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec3 inColor;
 
-layout(location = 0) out vec2 vUV;
+layout(location = 0) out vec3 vColor;
 
 layout(set = 0, binding = 0) uniform GlobalDataUBO_T {
-    mat4 projection;
+    mat4 proj_view;
 } global_data;
-
-layout(set = 1, binding = 0) uniform PerFrameDataUBO_T {
-    mat4 view;
-} per_frame_data;
 
 layout(push_constant, std430) uniform PushConstants {
     mat4 model;
@@ -49,30 +46,33 @@ layout(push_constant, std430) uniform PushConstants {
 
 void main()
 {
-    gl_Position = global_data.projection * per_frame_data.view * pc.model * vec4(inPosition, 0.0, 1.0);
-    vUV = inTexCoord;
+    gl_Position = global_data.proj_view * pc.model * vec4(inPosition, 1.0);
+    vColor = inColor;
 }
 )";
 
   const auto FRAGMENT_SHADER_SRC = R"(
 #version 460
-layout(location = 0) in vec2 vUV;
+layout(location = 0) in vec3 vColor;
 layout(location = 0) out vec4 outColor;
-
-layout(set = 2, binding = 0) uniform sampler2D tex;
 
 void main()
 {
-    outColor = texture(tex, vUV);
+    outColor = vec4(vColor, 1.0);
 }
 )";
+
+  struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 color;
+  };
 
   auto main() -> Result<void>
   {
     auto &logger = auxid::get_thread_logger();
 
     ghi::InitInfo init_info{
-        .app_name = "IAGHI Sandbox",
+        .app_name = "IAGHI Rotating Cube",
         .validation_enabled = true,
         .surface_width = 800,
         .surface_height = 600,
@@ -101,7 +101,7 @@ void main()
 
     AU_TRY_DISCARD(ghi::utils::initialize(device));
 
-    ghi::set_clear_color(device, 100.0f / 255.0f, 149.0f / 255.0f, 237.0f / 255.0f, 1.0f);
+    ghi::set_clear_color(device, 0.1f, 0.1f, 0.1f, 1.0f);
 
     AU_TRY_VAR(const vertex_shader, utils::create_shader_from_glsl(device, VERTEX_SHADER_SRC, EShaderStage::Vertex));
     AU_TRY_VAR(const fragment_shader,
@@ -109,17 +109,16 @@ void main()
 
     VertexInputBinding vertex_input_binding{
         .binding = 0,
-        .stride = sizeof(glm::vec4),
+        .stride = sizeof(Vertex),
         .input_rate = EInputRate::Vertex,
     };
 
     VertexInputAttribute vertex_input_attributes[2] = {
-        {.location = 0, .binding = 0, .format = EFormat::R32G32Float, .offset = 0},
-        {.location = 1, .binding = 0, .format = EFormat::R32G32Float, .offset = sizeof(glm::vec2)},
+        {.location = 0, .binding = 0, .format = EFormat::R32G32B32Float, .offset = offsetof(Vertex, pos)},
+        {.location = 1, .binding = 0, .format = EFormat::R32G32B32Float, .offset = offsetof(Vertex, color)},
     };
 
-    BindingLayout texture_binding_layout, global_data_binding_layout, per_frame_data_binding_layout;
-
+    BindingLayout global_data_binding_layout;
     AU_TRY_DISCARD(ghi::create_binding_layouts(
         device,
         {
@@ -127,124 +126,87 @@ void main()
                 BindingLayoutEntry{
                     .binding = 0,
                     .count = 1,
-                    .visibility = EShaderStage::Fragment,
-                    .type = EDescriptorType::CombinedImageSampler,
-                },
-            },
-            {
-                BindingLayoutEntry{
-                    .binding = 0,
-                    .count = 1,
-                    .visibility = EShaderStage::Vertex,
-                    .type = EDescriptorType::UniformBuffer,
-                },
-            },
-            {
-                BindingLayoutEntry{
-                    .binding = 0,
-                    .count = 1,
                     .visibility = EShaderStage::Vertex,
                     .type = EDescriptorType::UniformBuffer,
                 },
             },
         },
-        {&texture_binding_layout, &global_data_binding_layout, &per_frame_data_binding_layout}));
+        {&global_data_binding_layout}));
 
     ghi::GraphicsPipelineDesc pipeline_desc{
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
 
-        .cull_mode = ECullMode::None,
+        .enable_depth_test = true,
+        .cull_mode = ECullMode::Back,
 
-        .binding_layouts = {global_data_binding_layout, per_frame_data_binding_layout, texture_binding_layout},
+        .binding_layouts = {global_data_binding_layout},
         .vertex_bindings = {vertex_input_binding},
         .vertex_attributes = {vertex_input_attributes},
         .push_constant_ranges =
             {
-                PushConstantRange{0, sizeof(glm::mat4),
-                                  (EShaderStage) ((u32) EShaderStage::Vertex | (u32) EShaderStage::Fragment)},
+                PushConstantRange{0, sizeof(glm::mat4), (EShaderStage) ((u32) EShaderStage::Vertex | (u32) EShaderStage::Fragment)},
             },
     };
     AU_TRY_VAR(const pipeline, ghi::create_graphics_pipeline(device, pipeline_desc));
 
-    ghi::Buffer ubo_global_data_buffer, ubo_per_frame_data_buffer;
+    ghi::Buffer ubo_global_data_buffer;
     AU_TRY_DISCARD(ghi::create_buffers(device,
                                        {
-                                           ghi::BufferDesc{
-                                               .size_bytes = sizeof(glm::mat4),
-                                               .usage = EBufferUsage::StaticUniform,
-                                               .cpu_visible = true,
-                                           },
                                            ghi::BufferDesc{
                                                .size_bytes = sizeof(glm::mat4),
                                                .usage = EBufferUsage::FrameBoundUniform,
                                                .cpu_visible = true,
                                            },
                                        },
-                                       {&ubo_global_data_buffer, &ubo_per_frame_data_buffer}));
+                                       {&ubo_global_data_buffer}));
 
-    DescriptorTable texture_descriptor_table, global_data_descriptor_table, per_frame_data_descriptor_table;
-    AU_TRY_DISCARD(ghi::create_descriptor_tables(device, false, texture_binding_layout, {&texture_descriptor_table}));
+    DescriptorTable global_data_descriptor_table;
     AU_TRY_DISCARD(
-        ghi::create_descriptor_tables(device, false, global_data_binding_layout, {&global_data_descriptor_table}));
-    AU_TRY_DISCARD(
-        ghi::create_descriptor_tables(device, true, per_frame_data_binding_layout, {&per_frame_data_descriptor_table}));
+        ghi::create_descriptor_tables(device, true, global_data_binding_layout, {&global_data_descriptor_table}));
 
-    DescriptorUpdate descriptor_updates[3] = {
+    DescriptorUpdate descriptor_updates[1] = {
         {
             .table = global_data_descriptor_table,
             .binding = 0,
             .array_element = 0,
-
             .buffer = ubo_global_data_buffer,
-        },
-        {
-            .table = per_frame_data_descriptor_table,
-            .binding = 0,
-            .array_element = 0,
-
-            .buffer = ubo_per_frame_data_buffer,
-        },
-        {
-            .table = texture_descriptor_table,
-            .binding = 0,
-            .array_element = 0,
-
-            .image = ghi::utils::get_default_image(),
-            .sampler = ghi::utils::get_default_sampler(),
         },
     };
     update_descriptor_tables(device, descriptor_updates);
 
-    glm::mat4 m{1.0f};
-    {
-      const auto ptr = ghi::map_buffer(device, ubo_global_data_buffer);
-      memcpy(ptr, &m, sizeof(glm::mat4));
-      ghi::unmap_buffer(device, ubo_global_data_buffer);
-    }
-
     ghi::destroy_shaders(device, {vertex_shader, fragment_shader});
 
-    Vec<glm::vec4> vertices = {
-        {-0.5f, 0.5f, 0.0f, 0.0f},
-        {-0.5f, -0.5f, 0.0f, 1.0f},
-        {0.5f, -0.5f, 1.0f, 1.0f},
-        {0.5f, 0.5f, 1.0f, 0.0f},
+    au::Vec<Vertex> vertices = {
+        {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}},
+        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}},
+        {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+        {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}},
+        {{ 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}},
     };
-    Vec<i32> indices = {0, 1, 2, 2, 3, 0};
+    au::Vec<u16> indices = {
+        0, 2, 1, 2, 0, 3, // front
+        1, 6, 5, 6, 1, 2, // right
+        5, 7, 4, 7, 5, 6, // back
+        4, 3, 0, 3, 4, 7, // left
+        3, 6, 2, 6, 3, 7, // top
+        4, 1, 5, 1, 4, 0, // bottom
+    };
 
-    AU_TRY_VAR(vertex_buffer, ghi::utils::create_device_local_buffer(device, EBufferUsage::Vertex, sizeof(glm::vec4) * vertices.size(),
-                                                                     vertices.data(), sizeof(glm::vec4) * vertices.size()));
+    AU_TRY_VAR(vertex_buffer, ghi::utils::create_device_local_buffer(device, EBufferUsage::Vertex, sizeof(Vertex) * vertices.size(),
+                                                                     vertices.data(), sizeof(Vertex) * vertices.size()));
     AU_TRY_VAR(index_buffer, ghi::utils::create_device_local_buffer(
-        device, EBufferUsage::Index, sizeof(i32) * indices.size(), indices.data(), sizeof(i32) * indices.size()));
+        device, EBufferUsage::Index, sizeof(u16) * indices.size(), indices.data(), sizeof(u16) * indices.size()));
 
     SDL_ShowWindow(window);
 
-    logger.info("successfully initialized the engine");
+    logger.info("successfully initialized rotating-cube");
 
     bool running = true;
-    f32 delta_time = 0.0f;
-    f32 last_frame = 0.0f;
+    f32 rotation = 0.0f;
     while (running)
     {
       SDL_Event event;
@@ -259,34 +221,41 @@ void main()
         }
       }
 
-      const auto current_frame = static_cast<f32>(SDL_GetTicks()) / 1000.0f;
-      delta_time = current_frame - last_frame;
-      last_frame = current_frame;
+      u32 width = 800, height = 600;
+      ghi::get_swapchain_extent(device, width, height);
+
+      glm::mat4 proj = glm::perspective(glm::radians(45.0f), (f32)width / (f32)height, 0.1f, 100.0f);
+      glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 2.0f, 2.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+      
+      // Vulkan specific adjustments
+      proj[1][1] *= -1; 
+      
+      glm::mat4 proj_view = proj * view;
 
       {
-        const auto ptr = ghi::map_frame_bound_buffer(device, ubo_per_frame_data_buffer);
-        memcpy(ptr, &m, sizeof(glm::mat4));
-        ghi::unmap_buffer(device, ubo_per_frame_data_buffer);
+        const auto ptr = ghi::map_frame_bound_buffer(device, ubo_global_data_buffer);
+        memcpy(ptr, &proj_view, sizeof(glm::mat4));
+        ghi::unmap_buffer(device, ubo_global_data_buffer);
       }
 
       const auto cmd = ghi::begin_frame(device);
 
       ghi::cmd_begin_pipeline(cmd, pipeline);
 
-      ghi::cmd_bind_descriptor_table(cmd, 0, pipeline, global_data_descriptor_table, {});
-      ghi::cmd_bind_descriptor_table(cmd, 2, pipeline, texture_descriptor_table, {});
+      ghi::cmd_bind_frame_bound_descriptor_table(cmd, 0, pipeline, global_data_descriptor_table);
 
-      ghi::cmd_bind_frame_bound_descriptor_table(cmd, 1, pipeline, per_frame_data_descriptor_table);
-
-      ghi::cmd_set_viewport(cmd, 0, 0, 800, 600);
-      ghi::cmd_set_scissor(cmd, 0, 0, 800, 600);
+      ghi::cmd_set_viewport(cmd, 0, 0, (f32)width, (f32)height);
+      ghi::cmd_set_scissor(cmd, 0, 0, width, height);
 
       ghi::cmd_bind_vertex_buffers(cmd, 0, {vertex_buffer}, {0});
-      ghi::cmd_bind_index_buffer(cmd, index_buffer, 0, true);
+      ghi::cmd_bind_index_buffer(cmd, index_buffer, 0, false);
 
-      ghi::cmd_push_constants(cmd, pipeline, 0, sizeof(glm::mat4), &m);
+      rotation += 0.01f;
+      glm::mat4 model = glm::rotate(glm::mat4(1.0f), rotation, glm::vec3(0.5f, 1.0f, 0.0f));
 
-      ghi::cmd_draw_indexed(cmd, 6, 1, 0, 0, 0);
+      ghi::cmd_push_constants(cmd, pipeline, 0, sizeof(glm::mat4), &model);
+
+      ghi::cmd_draw_indexed(cmd, 36, 1, 0, 0, 0);
 
       ghi::cmd_end_pipeline(cmd, pipeline);
 
@@ -297,16 +266,15 @@ void main()
 
     ghi::utils::shutdown(device);
 
-    ghi::destroy_binding_layouts(device,
-                                 {texture_binding_layout, global_data_binding_layout, per_frame_data_binding_layout});
+    ghi::destroy_binding_layouts(device, {global_data_binding_layout});
 
     ghi::destroy_pipeline(device, pipeline);
 
-    ghi::destroy_buffers(device, {vertex_buffer, index_buffer, ubo_global_data_buffer, ubo_per_frame_data_buffer});
+    ghi::destroy_buffers(device, {vertex_buffer, index_buffer, ubo_global_data_buffer});
 
     ghi::destroy_device(device);
 
-    logger.info("cleanly exited the engine");
+    logger.info("cleanly exited rotating-cube");
 
     SDL_DestroyWindow(window);
     SDL_Quit();
