@@ -155,9 +155,9 @@ namespace ghi
           delete buffer;
           *out_handles[j] = nullptr;
         }
-        return buffer_res.error();
+        return au::fail(buffer_res.error());
       }
-      *out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer_res.value())));
+      *out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer_res.unwrap())));
     }
 
     return {};

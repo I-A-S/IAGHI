@@ -117,9 +117,9 @@ namespace ghi
           delete image;
           *out_handles[j] = nullptr;
         }
-        return image_res.error();
+        return au::fail(image_res.error());
       }
-      *out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image_res.value())));
+      *out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image_res.unwrap())));
     }
 
     return {};

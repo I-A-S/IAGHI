@@ -432,9 +432,9 @@ namespace ghi
           delete layout_impl;
           *out_layouts[j] = nullptr;
         }
-        return layout_res.error();
+        return au::fail(layout_res.error());
       }
-      *out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout_res.value())));
+      *out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout_res.unwrap())));
     }
 
     return {};
@@ -470,9 +470,9 @@ namespace ghi
           delete table_impl;
           *out_tables[j] = nullptr;
         }
-        return table_res.error();
+        return au::fail(table_res.error());
       }
-      *out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table_res.value())));
+      *out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table_res.unwrap())));
     }
 
     return {};

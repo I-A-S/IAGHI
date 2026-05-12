@@ -441,7 +441,7 @@ namespace ghi
     auto advance_res = dev->m_swapchain.advance_frame(dev->m_handle, dev->m_surface);
     if (!advance_res) return VK_NULL_HANDLE;
 
-    if (!advance_res.value())
+    if (!advance_res.unwrap())
     {
       (void) dev->m_swapchain.recreate(*dev);
       return VK_NULL_HANDLE;
