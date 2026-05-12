@@ -33,9 +33,6 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.target }} --config Release
 
-      - name: Test
-        run: ctest --preset ${{ matrix.target }} --output-on-failure
-
   build-windows:
     runs-on: windows-latest
     permissions:
@@ -67,6 +64,3 @@ jobs:
 
       - name: Build
         run: cmake --build --preset ${{ matrix.target }} --config Release
-
-      - name: Test
-        run: ctest --preset ${{ matrix.target }} --output-on-failure

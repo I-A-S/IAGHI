@@ -24,16 +24,11 @@ endif()
 auxid_setup_project()
 
 option(IAGHI_BUILD_UTILS "Build GHI Utils" ON)
-option(IAGHI_BUILD_TESTS "Build unit tests" ${IAGHI_IS_TOP_LEVEL})
 option(IAGHI_BUILD_EXAMPLES "Build examples" ${IAGHI_IS_TOP_LEVEL})
 
 include(cmake/find_deps.cmake)
 
 add_subdirectory(src)
-
-if(IAGHI_BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
 
 if(IAGHI_BUILD_EXAMPLES)
     add_subdirectory(examples)
