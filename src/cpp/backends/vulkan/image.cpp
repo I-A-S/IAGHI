@@ -92,7 +92,7 @@ namespace ghi
     {
       AU_TRY_VAR(image, VulkanImage::create(
           dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format), {desc.width, desc.height, desc.depth},
-          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_IMAGE_ASPECT_COLOR_BIT, desc.array_layers,
+          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_ASPECT_COLOR_BIT, desc.array_layers,
           desc.mip_levels)); // [IATODO]: Use ETextureType
       *out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image)));
     }

@@ -50,9 +50,10 @@ namespace ghi::utils
   * @param device Owning device.
   * @param filepath Path to the image file (formats supported by stb_image).
   * @param format Target texel format for the created image (default sRGBA8).
+  * @param generate_mipmaps Whether to automatically generate mipmaps.
   * @return New image handle on success.
   */
-  auto create_image_from_file(Device device, const char *filepath, EFormat format = EFormat::R8G8B8A8Srgb) -> Result<Image>;
+  auto create_image_from_file(Device device, const char *filepath, EFormat format = EFormat::R8G8B8A8Srgb, bool generate_mipmaps = true) -> Result<Image>;
   /*
   * @brief Creates a 2D image from raw RGBA8 row-major pixels and uploads it (single mip level; no mip generation).
   * @param device Owning device.
@@ -60,9 +61,10 @@ namespace ghi::utils
   * @param height Image height in pixels.
   * @param rgba_data Pointer to width * height RGBA8 texels (4 bytes per pixel).
   * @param format Target texel format for the created image (default sRGBA8).
+  * @param generate_mipmaps Whether to automatically generate mipmaps.
   * @return New image handle on success.
   */
-  auto create_image_from_rgba(Device device, u32 width, u32 height, const u8 *rgba_data, EFormat format = EFormat::R8G8B8A8Srgb) -> Result<Image>;
+  auto create_image_from_rgba(Device device, u32 width, u32 height, const u8 *rgba_data, EFormat format = EFormat::R8G8B8A8Srgb, bool generate_mipmaps = true) -> Result<Image>;
 
   /*
   * @brief Returns the default 32×32 checkerboard image created in initialize (violet / white tiles).

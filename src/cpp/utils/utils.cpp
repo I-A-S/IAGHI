@@ -27,6 +27,9 @@
 
 #include <stb_image.h>
 
+#include <cmath>
+#include <algorithm>
+
 namespace ghi::utils
 {
   usize g_staging_buffer_size{64 * 1024};
@@ -162,32 +165,33 @@ namespace ghi::utils
     return g_default_sampler;
   }
 
-  auto create_image_from_file(Device device, const char *filepath, EFormat format) -> Result<Image>
+  auto create_image_from_file(Device device, const char *filepath, EFormat format, bool generate_mipmaps) -> Result<Image>
   {
     i32 w, h, nr;
     const auto data = stbi_load(filepath, &w, &h, &nr, STBI_rgb_alpha);
     if (!data)
       return fail("failed to load image");
-    const auto result = create_image_from_rgba(device, w, h, data, format);
-    delete[] data;
+    const auto result = create_image_from_rgba(device, w, h, data, format, generate_mipmaps);
+    stbi_image_free(data);
     return result;
   }
 
-  auto create_image_from_rgba(Device device, u32 width, u32 height, const u8 *rgba_data, EFormat format)
+  auto create_image_from_rgba(Device device, u32 width, u32 height, const u8 *rgba_data, EFormat format, bool generate_mipmaps)
       -> Result<Image>
   {
     Image image;
+    u32 mip_levels = generate_mipmaps ? static_cast<u32>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
     const ImageDesc desc{
         .width = width,
         .height = height,
-        .mip_levels = 1, // [IATODO]
+        .mip_levels = mip_levels,
         .format = format,
         .array_layers = 1,         // [IATODO]
         .type = ETextureType::_2D, // [IATODO]
     };
     AU_TRY_DISCARD(ghi::create_images(device, {desc}, {&image}));
 
-    AU_TRY_DISCARD(ghi::upload_image_data(device, {image}, {rgba_data}, false));
+    AU_TRY_DISCARD(ghi::upload_image_data(device, {image}, {rgba_data}, generate_mipmaps));
 
     return image;
   }
