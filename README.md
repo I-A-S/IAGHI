@@ -23,6 +23,7 @@ Currently, IAGHI fully supports standard graphics rendering, with compute pipeli
 - Streamlined Synchronization: Replaces Vulkan's verbose memory barriers, access flags, and pipeline stages with a simplified `EResourceState` approach.
 - Dynamic Descriptor Tables: Easy-to-use binding layouts and descriptor updates for uniforms, storage buffers, and sampled images.
 - Modern Rendering: Supports SPIR-V shaders directly.
+- Off-screen Rendering: Full support for headless rendering into off-screen buffers without requiring a window surface.
 - Helper functions for automatic mip-map generation and handling block-compressed texture formats.
 
 ## **Architecture & Philosophy**
@@ -102,6 +103,12 @@ Here is a conceptual overview of how to interact with the API:
     
     ghi::wait_idle(device);
 ```
+
+## **Examples**
+IAGHI includes several examples to help you get started:
+- **Hello Triangle** (`examples/hello-triangle`): A basic example demonstrating device initialization, resource creation, and simple on-screen rendering.
+- **Rotating Cube** (`examples/rotating-cube`): Demonstrates 3D rendering with uniform buffers, push constants, and depth testing.
+- **Off-screen Rendering** (`examples/offscreen-rendering`): Shows how to perform headless rendering into an off-screen buffer without requiring a window surface.
 
 ## **Roadmap**
 The graphics core is complete! The next major milestones for IAGHI are:
