@@ -51,7 +51,17 @@ namespace ghi
   // Enums
   // -----------------------------------------------------------------------------
 
-  enum class EFormat
+    enum class EImageUsage
+    {
+      Sampled = 0x1,
+      Storage = 0x2,
+      ColorTarget = 0x4,
+      DepthTarget = 0x8,
+      TransferSrc = 0x10,
+      TransferDst = 0x20,
+    };
+    
+    enum class EFormat
   {
     Undefined = 0,
     R8G8B8A8Unorm,
@@ -179,6 +189,26 @@ namespace ghi
     TriangleStrip,
   };
 
+  inline EImageUsage operator|(EImageUsage a, EImageUsage b)
+  {
+    return static_cast<EImageUsage>(static_cast<int>(a) | static_cast<int>(b));
+  }
+  
+  inline EImageUsage operator&(EImageUsage a, EImageUsage b)
+  {
+    return static_cast<EImageUsage>(static_cast<int>(a) & static_cast<int>(b));
+  }
+
+  inline EBufferUsage operator|(EBufferUsage a, EBufferUsage b)
+  {
+    return static_cast<EBufferUsage>(static_cast<int>(a) | static_cast<int>(b));
+  }
+  
+  inline EBufferUsage operator&(EBufferUsage a, EBufferUsage b)
+  {
+    return static_cast<EBufferUsage>(static_cast<int>(a) & static_cast<int>(b));
+  }
+
   // -----------------------------------------------------------------------------
   // Callbacks
   // -----------------------------------------------------------------------------
@@ -212,6 +242,10 @@ namespace ghi
     u32 surface_height;
     SurfaceCreationCallback surface_creation_callback;
     void *surface_creation_callback_user_data;
+    u32 max_uniform_buffers{1000};
+    u32 max_storage_buffers{1000};
+    u32 max_sampled_images{1000};
+    u32 max_storage_images{1000};
   };
 
   /*
@@ -249,6 +283,7 @@ namespace ghi
     EFormat format{};
     u32 array_layers{1};
     ETextureType type{ETextureType::_2D};
+    EImageUsage usage{EImageUsage::Sampled | EImageUsage::TransferDst | EImageUsage::TransferSrc};
     const char *debug_name;
   };
 
@@ -278,6 +313,7 @@ namespace ghi
     u32 count;
     EShaderStage visibility;
     EDescriptorType type;
+    bool is_bindless{false};
   };
 
   /*
@@ -350,8 +386,8 @@ namespace ghi
   * @brief Full description of a graphics pipeline state object.
   * @param vertex_shader Vertex stage SPIR-V module handle.
   * @param fragment_shader Fragment stage SPIR-V module handle.
-  * @param depth_target Depth attachment image for depth testing; optional per usage.
-  * @param color_targets Color attachments for fragment outputs.
+  * @param depth_target_format Format of the depth attachment.
+  * @param color_target_formats Formats of the color attachments.
   * @param enable_depth_test Whether depth testing is enabled.
   * @param cull_mode Triangle face culling mode.
   * @param blend_mode Fragment color blending mode.
@@ -367,8 +403,8 @@ namespace ghi
     Shader vertex_shader;
     Shader fragment_shader;
 
-    Image depth_target{};
-    Span<const Image> color_targets{};
+    EFormat depth_target_format{EFormat::Undefined};
+    Span<const EFormat> color_target_formats{};
 
     bool enable_depth_test{true};
     ECullMode cull_mode{ECullMode::Back};
@@ -392,6 +428,7 @@ namespace ghi
     Shader compute_shader;
 
     Span<const BindingLayout> binding_layouts;
+    Span<const PushConstantRange> push_constant_ranges;
   };
 
   /*
@@ -427,6 +464,21 @@ namespace ghi
   };
 
   /*
+  * @brief Information for beginning a dynamic rendering pass.
+  * @param width Width of the render area.
+  * @param height Height of the render area.
+  * @param color_attachments Color attachments to render to.
+  * @param depth_attachment Depth attachment to render to (optional).
+  */
+  struct RenderingInfo
+  {
+    u32 width;
+    u32 height;
+    Span<const ColorAttachment> color_attachments;
+    const DepthAttachment *depth_attachment;
+  };
+
+  /*
   * @brief Image layout / access transition for pipeline barriers.
   * @param image Image whose state is transitioning.
   * @param old_state Resource state before the barrier.
@@ -437,6 +489,10 @@ namespace ghi
     Image image;
     EResourceState old_state;
     EResourceState new_state;
+    u32 base_mip{0};
+    u32 mip_count{~0u};
+    u32 base_layer{0};
+    u32 layer_count{~0u};
   };
 
   /*
@@ -450,5 +506,7 @@ namespace ghi
     Buffer buffer;
     EResourceState old_state;
     EResourceState new_state;
+    u64 offset{0};
+    u64 size{~0ull};
   };
 }

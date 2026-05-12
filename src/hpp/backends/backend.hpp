@@ -33,6 +33,7 @@ namespace ghi
     { BackendT::map_frame_bound_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void *>;
     { BackendT::map_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void *>;
     { BackendT::unmap_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void>;
+    { BackendT::invalidate_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void>;
 
     {
       BackendT::create_images(std::declval<Device>(), std::declval<Span<const ImageDesc>>(), std::declval<Span<Image* const>>())
@@ -74,6 +75,11 @@ namespace ghi
     {
       BackendT::create_graphics_pipeline(std::declval<Device>(), std::declval<const GraphicsPipelineDesc &>())
     } -> std::same_as<Result<Pipeline>>;
+
+    {
+      BackendT::create_compute_pipeline(std::declval<Device>(), std::declval<const ComputePipelineDesc &>())
+    } -> std::same_as<Result<Pipeline>>;
+
     { BackendT::destroy_pipeline(std::declval<Device>(), std::declval<Pipeline>()) } -> std::same_as<void>;
 
     {
@@ -90,10 +96,6 @@ namespace ghi
     { BackendT::get_active_frame_index(std::declval<Device>()) } -> std::same_as<u32>;
 
     { BackendT::wait_idle(std::declval<Device>()) } -> std::same_as<void>;
-    {
-      BackendT::set_clear_color(std::declval<Device>(), std::declval<f32>(), std::declval<f32>(), std::declval<f32>(),
-                                std::declval<f32>())
-    } -> std::same_as<void>;
 
     {
       BackendT::execute_single_time_commands(std::declval<Device>(),
@@ -116,6 +118,11 @@ namespace ghi
 
     { BackendT::cmd_begin_pipeline(std::declval<CommandBuffer>(), std::declval<Pipeline>()) } -> std::same_as<void>;
     { BackendT::cmd_end_pipeline(std::declval<CommandBuffer>(), std::declval<Pipeline>()) } -> std::same_as<void>;
+
+    {
+      BackendT::cmd_begin_rendering(std::declval<Device>(), std::declval<CommandBuffer>(), std::declval<const RenderingInfo &>())
+    } -> std::same_as<void>;
+    { BackendT::cmd_end_rendering(std::declval<CommandBuffer>()) } -> std::same_as<void>;
 
     {
       BackendT::cmd_push_constants(std::declval<CommandBuffer>(), std::declval<Pipeline>(), std::declval<u32>(),
@@ -152,6 +159,10 @@ namespace ghi
     {
       BackendT::cmd_draw_indexed_indirect(std::declval<CommandBuffer>(), std::declval<Buffer>(), std::declval<u64>(),
                                           std::declval<u32>(), std::declval<u32>())
+    } -> std::same_as<void>;
+
+    {
+      BackendT::cmd_dispatch(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<u32>(), std::declval<u32>())
     } -> std::same_as<void>;
 
     {

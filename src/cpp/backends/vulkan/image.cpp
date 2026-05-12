@@ -90,11 +90,36 @@ namespace ghi
     u32 i{0};
     for (const auto &desc : descs)
     {
-      AU_TRY_VAR(image, VulkanImage::create(
+      VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+      if (static_cast<int>(desc.usage) & static_cast<int>(EImageUsage::Sampled))
+        usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+      if (static_cast<int>(desc.usage) & static_cast<int>(EImageUsage::Storage))
+        usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+      if (static_cast<int>(desc.usage) & static_cast<int>(EImageUsage::ColorTarget))
+        usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      if (static_cast<int>(desc.usage) & static_cast<int>(EImageUsage::DepthTarget))
+        usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        
+      VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+      if (VulkanBackend::is_vk_depth_format(map_format_enum_to_vk(desc.format)))
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+      auto image_res = VulkanImage::create(
           dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format), {desc.width, desc.height, desc.depth},
-          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_IMAGE_ASPECT_COLOR_BIT, desc.array_layers,
-          desc.mip_levels)); // [IATODO]: Use ETextureType
-      *out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image)));
+          usage, aspect, desc.array_layers,
+          desc.mip_levels); // [IATODO]: Use ETextureType
+      if (!image_res.has_value())
+      {
+        for (u32 j = 0; j < i; ++j)
+        {
+          auto image = reinterpret_cast<VulkanImage *>(*out_handles[j]);
+          image->destroy(dev->m_handle, dev->m_allocator);
+          delete image;
+          *out_handles[j] = nullptr;
+        }
+        return image_res.error();
+      }
+      *out_handles[i++] = reinterpret_cast<Image>(new VulkanImage(std::move(image_res.value())));
     }
 
     return {};
@@ -298,6 +323,11 @@ namespace ghi
             int32_t mipWidth = impl->get_extent().width;
             int32_t mipHeight = impl->get_extent().height;
 
+            VkFormatProperties formatProperties;
+            vkGetPhysicalDeviceFormatProperties(dev->m_physical_device, impl->get_format(), &formatProperties);
+            bool supportsLinearFiltering = (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
+            VkFilter blitFilter = supportsLinearFiltering ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+
             for (u32 j = 1; j < impl->get_mip_level_count(); j++)
             {
               VkImageSubresourceRange mipSubRange = {};
@@ -327,7 +357,7 @@ namespace ghi
               blit.dstSubresource.layerCount = impl->get_layer_count();
 
               vkCmdBlitImage(cmd, impl->get_handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, impl->get_handle(),
-                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, blitFilter);
 
               insert_image_barrier(cmd, impl->get_handle(), VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -392,7 +422,16 @@ namespace ghi
       info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
       VkSampler samplerHandle;
-      VK_CALL(vkCreateSampler(dev->get_handle(), &info, nullptr, &samplerHandle), "failed to create sampler");
+      const auto r = vkCreateSampler(dev->get_handle(), &info, nullptr, &samplerHandle);
+      if (r != VK_SUCCESS)
+      {
+        for (u32 j = 0; j < i; ++j)
+        {
+          vkDestroySampler(dev->get_handle(), reinterpret_cast<VkSampler>(*out_handles[j]), nullptr);
+          *out_handles[j] = nullptr;
+        }
+        return fail("failed to create sampler");
+      }
 
       *out_handles[i] = reinterpret_cast<Sampler>(samplerHandle);
     }

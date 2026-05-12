@@ -92,6 +92,12 @@ namespace ghi
   * @param buffer Buffer to unmap.
   */
   auto unmap_buffer(Device device, Buffer buffer) -> void;
+  /*
+  * @brief Invalidates memory cache for a mapped buffer.
+  * @param device Owning device.
+  * @param buffer Buffer to invalidate.
+  */
+  auto invalidate_buffer(Device device, Buffer buffer) -> void;
 
   /*
   * @brief Creates one or more images from descriptions.
@@ -189,6 +195,13 @@ namespace ghi
   */
   auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc &desc) -> Result<Pipeline>;
   /*
+  * @brief Creates a compute pipeline from a compute shader and pipeline layout.
+  * @param device Owning device.
+  * @param desc Full pipeline description.
+  * @return Pipeline handle on success.
+  */
+  auto create_compute_pipeline(Device device, const ComputePipelineDesc &desc) -> Result<Pipeline>;
+  /*
   * @brief Destroys a pipeline object.
   * @param device Owning device.
   * @param pipeline Pipeline to destroy.
@@ -242,6 +255,19 @@ namespace ghi
   auto get_active_frame_index(Device device) -> u32;
 
   /*
+  * @brief Begins a dynamic rendering pass.
+  * @param device Owning device.
+  * @param cmd Command buffer.
+  * @param info Rendering info.
+  */
+  auto cmd_begin_rendering(Device device, CommandBuffer cmd, const RenderingInfo &info) -> void;
+  /*
+  * @brief Ends the active rendering pass.
+  * @param cmd Command buffer.
+  */
+  auto cmd_end_rendering(CommandBuffer cmd) -> void;
+
+  /*
   * @brief Copies the current swapchain/backbuffer image to a CPU buffer (e.g. screenshots).
   * @param device Owning device.
   * @param out_data Destination span (layout matches swapchain format and extent).
@@ -254,15 +280,6 @@ namespace ghi
   * @param device Owning device.
   */
   auto wait_idle(Device device) -> void;
-  /*
-  * @brief Sets the default clear color for render passes that clear color targets.
-  * @param device Owning device.
-  * @param r Red component.
-  * @param g Green component.
-  * @param b Blue component.
-  * @param a Alpha component (default 1).
-  */
-  auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;
 
   /*
   * @brief Allocates a one-shot command buffer, runs the callback, then submits and waits.
@@ -392,6 +409,14 @@ namespace ghi
   */
   auto cmd_draw_indexed_indirect(CommandBuffer cmd, Buffer indirect_buffer, u64 offset, u32 draw_count, u32 stride)
       -> void;
+  /*
+  * @brief Dispatches compute workgroups.
+  * @param cmd Command buffer.
+  * @param group_count_x Number of workgroups to dispatch in the X dimension.
+  * @param group_count_y Number of workgroups to dispatch in the Y dimension.
+  * @param group_count_z Number of workgroups to dispatch in the Z dimension.
+  */
+  auto cmd_dispatch(CommandBuffer cmd, u32 group_count_x, u32 group_count_y, u32 group_count_z) -> void;
 
   /*
   * @brief Inserts memory barriers for buffers and images (layout and visibility).

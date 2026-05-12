@@ -8,7 +8,7 @@
       "name": "Launch",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceRoot}/out/build/IAGHI-x64-windows-clang/bin/Debug/Sandbox.exe",
+      "program": "${workspaceRoot}/out/build/IAGHI-x64-windows-clang/bin/Debug/hello-compute.exe",
       "args": [],
       "cwd": "${workspaceRoot}"
     }

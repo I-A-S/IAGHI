@@ -225,12 +225,14 @@ namespace ghi
         .dynamicRendering = VK_TRUE,
     };
 
-    VkPhysicalDeviceVulkan12Features enable_vulkan12_features = {
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext = &enable_vulkan13_features,
-        .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
-        .runtimeDescriptorArray = VK_TRUE,
-    };
+    VkPhysicalDeviceVulkan12Features enable_vulkan12_features{};
+    enable_vulkan12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    enable_vulkan12_features.pNext = &enable_vulkan13_features;
+    enable_vulkan12_features.descriptorIndexing = VK_TRUE;
+    enable_vulkan12_features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    enable_vulkan12_features.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
+    enable_vulkan12_features.descriptorBindingPartiallyBound = VK_TRUE;
+    enable_vulkan12_features.runtimeDescriptorArray = VK_TRUE;
 
     VkPhysicalDeviceFeatures2 enable_device_features2{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -305,18 +307,17 @@ namespace ghi
     VK_CALL(vkCreateFence(result.m_handle, &fence_create_info, nullptr, &result.m_single_time_command_fence),
             "Creating single time command fence");
 
-
-
     AU_TRY_VAR(swapchain, VulkanSwapchain::create(result, init_info.surface_width, init_info.surface_height));
-    result.m_swapchain=swapchain;
+    result.m_swapchain = swapchain;
 
-    VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000}};
+    VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, init_info.max_uniform_buffers},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, init_info.max_storage_buffers},
+                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, init_info.max_sampled_images},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, init_info.max_storage_images}};
 
     VkDescriptorPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     pool_info.poolSizeCount = 4;
     pool_info.pPoolSizes = pool_sizes;
     pool_info.maxSets = 1000;
@@ -339,7 +340,8 @@ namespace ghi
 
     vmaDestroyAllocator(m_allocator);
 
-    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    if (m_surface != VK_NULL_HANDLE)
+      vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vkDestroyDevice(m_handle, nullptr);
 
     vkDestroyDebugUtilsMessengerEXT(m_instance, m_debug_messenger, nullptr);
@@ -379,7 +381,7 @@ namespace ghi
     if (vkQueueSubmit(m_graphics_queue, 1, &submit_info, fence) != VK_SUCCESS)
       return false;
 
-    m_swapchain.present(*this);
+    m_swapchain.present(m_graphics_queue, m_surface);
 
     return true;
   }
@@ -448,18 +450,30 @@ namespace ghi
     Vec<VkPhysicalDevice> physical_devices;
     VK_ENUM_CALL(vkEnumeratePhysicalDevices, physical_devices, m_instance);
 
+    u32 best_score = 0;
+
     for (const auto &pd : physical_devices)
     {
       vkGetPhysicalDeviceProperties(pd, &props);
       vkGetPhysicalDeviceFeatures(pd, &features);
 
-      if (props.deviceType != VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-        continue;
+      u32 score = 0;
+      if (props.deviceType == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        score += 1000;
+      else if (props.deviceType == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+        score += 500;
+      else if (props.deviceType == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU)
+        score += 250;
+      else
+        score += 100;
 
       u32 queue_count = 0;
       vkGetPhysicalDeviceQueueFamilyProperties(pd, &queue_count, nullptr);
       Vec<VkQueueFamilyProperties> queues(queue_count);
       vkGetPhysicalDeviceQueueFamilyProperties(pd, &queue_count, queues.data());
+
+      bool has_required_queues = false;
+      u32 graphics_idx = UINT32_MAX;
 
       for (u32 i = 0; i < queue_count; i++)
       {
@@ -471,19 +485,26 @@ namespace ghi
 
         if ((queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && supports_present)
         {
-          physical_device = pd;
-          m_graphics_queue_family_index = i;
-          found = true;
+          has_required_queues = true;
+          graphics_idx = i;
         }
+      }
+
+      if (has_required_queues && score > best_score)
+      {
+        physical_device = pd;
+        m_graphics_queue_family_index = graphics_idx;
+        found = true;
+        best_score = score;
       }
     }
 
     if (!found)
       return fail("failed to find suitable graphics hardware.");
 
+    vkGetPhysicalDeviceProperties(physical_device, &props);
     logger.info("using the hardware device '%s'", props.deviceName);
 
-    vkGetPhysicalDeviceProperties(physical_device, &props);
     return Pair<VkPhysicalDevice, VkPhysicalDeviceProperties>{physical_device, props};
   }
 

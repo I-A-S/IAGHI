@@ -48,9 +48,9 @@ public:
     auto recreate(VulkanDevice &device) -> Result<void>;
     auto recreate(VulkanDevice &device, u32 width, u32 height) -> Result<void>;
 
-    auto advance_frame(VulkanDevice &device) -> bool;
+    auto advance_frame(VkDevice device, VkSurfaceKHR surface) -> Result<bool>;
 
-    auto present(VulkanDevice &device) -> void;
+    auto present(VkQueue graphics_queue, VkSurfaceKHR surface) -> void;
 
 public:
     auto get_frame() -> Frame &
@@ -85,11 +85,6 @@ public:
       return m_current_sync_frame_index;
     }
 
-    [[nodiscard]] auto get_clear_color() const -> VkClearColorValue
-    {
-      return {m_clear_color[0], m_clear_color[1], m_clear_color[2], m_clear_color[3]};
-    }
-
     [[nodiscard]] auto get_color_format() const -> VkFormat
     {
       return m_format;
@@ -98,14 +93,6 @@ public:
     [[nodiscard]] auto get_depth_format() const -> VkFormat
     {
       return m_depth_format;
-    }
-
-    auto set_clear_color(f32 r, f32 g, f32 b, f32 a = 1.0f) -> void
-    {
-      m_clear_color[0] = r;
-      m_clear_color[1] = g;
-      m_clear_color[2] = b;
-      m_clear_color[3] = a;
     }
 
 private:
@@ -121,8 +108,6 @@ private:
     u32 m_current_frame_index{};
     u32 m_current_sync_frame_index{};
     Frame m_frames[NUM_FRAMES_BUFFERED]{};
-
-    f32 m_clear_color[4]{};
 
     friend class VulkanDevice;
     friend class VulkanBackend;

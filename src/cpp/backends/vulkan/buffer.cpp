@@ -45,7 +45,7 @@ namespace ghi
 
     VmaAllocationCreateInfo alloc_create_info{
         .flags = host_visible
-                     ? static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                     ? static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
                                                              VMA_ALLOCATION_CREATE_MAPPED_BIT)
                      : static_cast<VmaAllocationCreateFlags>(0),
         .usage = host_visible ? VMA_MEMORY_USAGE_AUTO : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
@@ -127,6 +127,11 @@ namespace ghi
     vmaFlushAllocation(m_device_ref.get_allocator(), m_allocation, offset, size);
   }
 
+  auto VulkanBuffer::invalidate(u64 offset, u64 size) -> void
+  {
+    vmaInvalidateAllocation(m_device_ref.get_allocator(), m_allocation, offset, size);
+  }
+
   auto VulkanBackend::create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer* const> out_handles) -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
@@ -139,9 +144,20 @@ namespace ghi
 
       const auto is_frame_bound = (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundUniform)) ||
                                   (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundStorage));
-          AU_TRY_VAR(buffer, VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
-                                      is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name));
-      *out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer)));
+      auto buffer_res = VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
+                                      is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name);
+      if (!buffer_res.has_value())
+      {
+        for (u32 j = 0; j < i; ++j)
+        {
+          const auto buffer = reinterpret_cast<VulkanBuffer *>(*out_handles[j]);
+          buffer->destroy();
+          delete buffer;
+          *out_handles[j] = nullptr;
+        }
+        return buffer_res.error();
+      }
+      *out_handles[i++] = reinterpret_cast<Buffer>(new VulkanBuffer(std::move(buffer_res.value())));
     }
 
     return {};
@@ -173,5 +189,10 @@ namespace ghi
   auto VulkanBackend::unmap_buffer(Device device, Buffer buffer) -> void
   {
     reinterpret_cast<VulkanBuffer *>(buffer)->unmap();
+  }
+
+  auto VulkanBackend::invalidate_buffer(Device device, Buffer buffer) -> void
+  {
+    reinterpret_cast<VulkanBuffer *>(buffer)->invalidate();
   }
 } // namespace ghi

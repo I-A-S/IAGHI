@@ -38,6 +38,7 @@ public:
     auto map(u32 frame_index) -> void *;
     auto unmap() -> void;
     auto flush(u64 offset = 0, u64 size = VK_WHOLE_SIZE) -> void;
+    auto invalidate(u64 offset = 0, u64 size = VK_WHOLE_SIZE) -> void;
 
 public:
     auto get_device() -> VulkanDevice &

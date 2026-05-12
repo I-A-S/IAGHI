@@ -92,7 +92,7 @@ private:
     VkQueue m_compute_queue{};
     VkQueue m_transfer_queue{};
 
-    VkSurfaceKHR m_surface{};
+    VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 
     VulkanSwapchain m_swapchain{};
 

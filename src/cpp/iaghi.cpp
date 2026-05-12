@@ -56,6 +56,11 @@ namespace ghi
     VulkanBackend::unmap_buffer(device, buffer);
   }
 
+  auto invalidate_buffer(Device device, Buffer buffer) -> void
+  {
+    VulkanBackend::invalidate_buffer(device, buffer);
+  }
+
   auto create_images(Device device, Span<const ImageDesc> descs, Span<Image *const> out_handles) -> Result<void>
   {
     return VulkanBackend::create_images(device, descs, out_handles);
@@ -119,6 +124,11 @@ namespace ghi
     return VulkanBackend::create_graphics_pipeline(device, desc);
   }
 
+  auto create_compute_pipeline(Device device, const ComputePipelineDesc &desc) -> Result<Pipeline>
+  {
+    return VulkanBackend::create_compute_pipeline(device, desc);
+  }
+
   auto destroy_pipeline(Device device, Pipeline pipeline) -> void
   {
     VulkanBackend::destroy_pipeline(device, pipeline);
@@ -169,11 +179,6 @@ namespace ghi
     VulkanBackend::wait_idle(device);
   }
 
-  auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a) -> void
-  {
-    VulkanBackend::set_clear_color(device, r, g, b, a);
-  }
-
   auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)> &commands_callback)
       -> Result<void>
   {
@@ -207,6 +212,16 @@ namespace ghi
   auto cmd_end_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void
   {
     VulkanBackend::cmd_end_pipeline(cmd, pipeline);
+  }
+
+  auto cmd_begin_rendering(Device device, CommandBuffer cmd, const RenderingInfo &info) -> void
+  {
+    VulkanBackend::cmd_begin_rendering(device, cmd, info);
+  }
+
+  auto cmd_end_rendering(CommandBuffer cmd) -> void
+  {
+    VulkanBackend::cmd_end_rendering(cmd);
   }
 
   auto cmd_push_constants(CommandBuffer cmd, Pipeline pipeline, u32 offset, u32 size, const void *data) -> void
@@ -253,6 +268,11 @@ namespace ghi
     VulkanBackend::cmd_draw_indexed_indirect(cmd, indirect_buffer, offset, draw_count, stride);
   }
 
+  auto cmd_dispatch(CommandBuffer cmd, u32 group_count_x, u32 group_count_y, u32 group_count_z) -> void
+  {
+    VulkanBackend::cmd_dispatch(cmd, group_count_x, group_count_y, group_count_z);
+  }
+
   auto cmd_pipeline_barrier(CommandBuffer cmd, Span<const BufferBarrier> buffer_barriers,
                             Span<const ImageBarrier> image_barriers) -> void
   {
@@ -270,7 +290,22 @@ namespace ghi
 
   auto is_compressed_format(EFormat format) -> bool
   {
-    return format >= EFormat::Bc1RgbUnormBlock;
+    switch (format)
+    {
+    case EFormat::Bc1RgbUnormBlock:
+    case EFormat::Bc1RgbSrgbBlock:
+    case EFormat::Bc1RgbaUnormBlock:
+    case EFormat::Bc1RgbaSrgbBlock:
+    case EFormat::Bc2UnormBlock:
+    case EFormat::Bc2SrgbBlock:
+    case EFormat::Bc3UnormBlock:
+    case EFormat::Bc3SrgbBlock:
+    case EFormat::Bc5UnormBlock:
+    case EFormat::Bc5SnormBlock:
+      return true;
+    default:
+      return false;
+    }
   }
 
   auto get_format_byte_size(EFormat format) -> u32

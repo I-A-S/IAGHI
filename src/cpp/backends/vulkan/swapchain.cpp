@@ -24,7 +24,18 @@ namespace ghi
   {
     VulkanSwapchain result{};
 
+    VkFormat depth_formats[] = {VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D16_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT};
     result.m_depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    for (auto format : depth_formats)
+    {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(device.m_physical_device, format, &props);
+        if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        {
+            result.m_depth_format = format;
+            break;
+        }
+    }
 
     if (device.m_surface != VK_NULL_HANDLE)
     {
@@ -283,25 +294,24 @@ namespace ghi
     return recreate(device);
   }
 
-  auto VulkanSwapchain::advance_frame(VulkanDevice &device) -> bool
+  auto VulkanSwapchain::advance_frame(VkDevice device, VkSurfaceKHR surface) -> Result<bool>
   {
     const auto &frame = m_frames[m_current_sync_frame_index];
 
-    vkWaitForFences(device.m_handle, 1, &frame.in_use_fence, VK_TRUE, UINT64_MAX);
+    vkWaitForFences(device, 1, &frame.in_use_fence, VK_TRUE, UINT64_MAX);
 
-    if (device.m_surface != VK_NULL_HANDLE)
+    if (surface != VK_NULL_HANDLE)
     {
       u32 image_index{};
-      const auto result = vkAcquireNextImageKHR(device.m_handle, m_handle, UINT64_MAX, frame.image_available_semaphore,
+      const auto result = vkAcquireNextImageKHR(device, m_handle, UINT64_MAX, frame.image_available_semaphore,
                                                 VK_NULL_HANDLE, &image_index);
       if (result == VK_ERROR_OUT_OF_DATE_KHR)
       {
-        (void) recreate(device);
         return false;
       }
 
       if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-        return false;
+        return fail("Failed to acquire next image");
 
       m_current_frame_index = image_index;
     }
@@ -310,16 +320,16 @@ namespace ghi
       m_current_frame_index = (m_current_frame_index + 1) % m_buffer_count;
     }
 
-    vkResetFences(device.m_handle, 1, &frame.in_use_fence);
+    vkResetFences(device, 1, &frame.in_use_fence);
 
     return true;
   }
 
-  auto VulkanSwapchain::present(VulkanDevice &device) -> void
+  auto VulkanSwapchain::present(VkQueue graphics_queue, VkSurfaceKHR surface) -> void
   {
     const auto &image_frame = m_frames[m_current_frame_index];
 
-    if (device.m_surface != VK_NULL_HANDLE)
+    if (surface != VK_NULL_HANDLE)
     {
       VkPresentInfoKHR present_info{};
       present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -332,7 +342,7 @@ namespace ghi
         present_info.pWaitSemaphores = &image_frame.render_finished_semaphore;
       }
 
-      vkQueuePresentKHR(device.m_graphics_queue, &present_info);
+      vkQueuePresentKHR(graphics_queue, &present_info);
     }
 
     m_current_sync_frame_index = (m_current_sync_frame_index + 1) % m_buffer_count;

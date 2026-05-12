@@ -89,6 +89,10 @@ namespace ghi
     Vec<VkDescriptorSetLayoutBinding> bindings;
     bindings.reserve(entries.size());
 
+    Vec<VkDescriptorBindingFlags> binding_flags;
+    binding_flags.reserve(entries.size());
+    bool has_bindless = false;
+
     VulkanBindingLayout result;
 
     for (const auto &entry : entries)
@@ -101,13 +105,31 @@ namespace ghi
       b.pImmutableSamplers = nullptr; // [IATODO] Support immutable samplers
       bindings.push_back(b);
 
+      VkDescriptorBindingFlags flags = 0;
+      if (entry.is_bindless)
+      {
+        flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+        has_bindless = true;
+      }
+      binding_flags.push_back(flags);
+
       result.binding_types[entry.binding] = b.descriptorType;
     }
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo flags_info{};
+    flags_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    flags_info.bindingCount = static_cast<u32>(binding_flags.size());
+    flags_info.pBindingFlags = binding_flags.data();
 
     VkDescriptorSetLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layout_info.bindingCount = static_cast<u32>(bindings.size());
     layout_info.pBindings = bindings.data();
+    if (has_bindless)
+    {
+      layout_info.pNext = &flags_info;
+      layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    }
 
     VkDescriptorSetLayout layout_handle;
     VK_CALL(vkCreateDescriptorSetLayout(device.get_handle(), &layout_info, nullptr, &layout_handle),
@@ -141,6 +163,13 @@ namespace ghi
         .pushConstantRangeCount = static_cast<u32>(push_constants.size()),
         .pPushConstantRanges = push_constants.data(),
     };
+
+    VkShaderStageFlags pc_stages = 0;
+    for (const auto& pc : push_constants)
+    {
+      pc_stages |= pc.stageFlags;
+    }
+    result.push_constant_stages = pc_stages;
 
     VK_CALL(vkCreatePipelineLayout(device.get_handle(), &layout_create_info, nullptr, &result.handle),
             "Creating pipeline layout");
@@ -183,11 +212,11 @@ namespace ghi
   }
 
   auto VulkanGraphicsPipeline::create(VulkanDevice &device, const GraphicsPipelineDesc &desc)
-      -> Result<VulkanGraphicsPipeline>
+      -> Result<VulkanGraphicsPipeline*>
   {
-    VulkanGraphicsPipeline result{};
+    auto result = new VulkanGraphicsPipeline();
 
-    result.m_device = &device;
+    result->m_device = &device;
 
     Vec<VkPushConstantRange> push_constants;
     for (const auto &pc : desc.push_constant_ranges)
@@ -203,7 +232,7 @@ namespace ghi
       bindings_layouts.push_back(reinterpret_cast<VulkanBindingLayout *>(desc.binding_layouts[i]));
     }
     AU_TRY_VAR(layout, VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
-    result.m_layout=std::move(layout);
+    result->m_layout=std::move(layout);
 
     const auto vertex_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.vertex_shader);
     const auto fragment_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.fragment_shader);
@@ -265,30 +294,22 @@ namespace ghi
     Vec<VkFormat> color_attachment_formats;
     VkFormat depth_attachment_format = VK_FORMAT_UNDEFINED;
 
-    if (desc.color_targets.empty())
+    if (desc.color_target_formats.empty())
     {
       color_attachment_formats.push_back(device.get_swapchain().get_color_format());
       depth_attachment_format =
           desc.enable_depth_test ? device.get_swapchain().get_depth_format() : VK_FORMAT_UNDEFINED;
-      result.m_color_attachments = Vec<VulkanImage *>{};
-      result.m_depth_attachment = {};
-      result.m_target_swapchain = true;
     }
     else
     {
-      for (auto &color_target : desc.color_targets)
+      for (auto format : desc.color_target_formats)
       {
-        const auto &target = reinterpret_cast<VulkanImage *>(color_target);
-        color_attachment_formats.push_back(target->get_format());
-        result.m_color_attachments.push_back(target);
+        color_attachment_formats.push_back(VulkanBackend::map_format_enum_to_vk(format));
       }
       depth_attachment_format = desc.enable_depth_test
-                                    ? reinterpret_cast<VulkanImage *>(desc.depth_target)->get_format()
+                                    ? VulkanBackend::map_format_enum_to_vk(desc.depth_target_format)
                                     : VK_FORMAT_UNDEFINED;
-      result.m_depth_attachment = desc.enable_depth_test ? reinterpret_cast<VulkanImage *>(desc.depth_target) : nullptr;
-      result.m_target_swapchain = false;
     }
-    result.m_enable_depth_test = desc.enable_depth_test;
 
     VkPipelineRenderingCreateInfo rendering_info{};
     rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
@@ -317,10 +338,10 @@ namespace ghi
         .pDepthStencilState = &depth_stencil,
         .pColorBlendState = &color_blending,
         .pDynamicState = &dynamic_state,
-        .layout = result.m_layout.handle,
+        .layout = result->m_layout.handle,
     };
 
-    VK_CALL(vkCreateGraphicsPipelines(device.get_handle(), nullptr, 1, &create_info, nullptr, &result.m_handle),
+    VK_CALL(vkCreateGraphicsPipelines(device.get_handle(), nullptr, 1, &create_info, nullptr, &result->m_handle),
             "Creating graphics pipeline");
 
     return result;
@@ -334,69 +355,63 @@ namespace ghi
 
   auto VulkanGraphicsPipeline::begin(VkCommandBuffer cmd) -> void
   {
-    Vec<VkRenderingAttachmentInfo> color_attachments;
-
-    VkRenderingAttachmentInfo depth_attachment_info{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {.depthStencil = {1.0f, 0}},
-    };
-
-    if (m_target_swapchain)
-    {
-      VkRenderingAttachmentInfo attachment_info{
-          .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-          .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-          .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-          .clearValue =
-              {
-                  .color = m_device->get_swapchain().get_clear_color(),
-              },
-      };
-      m_device->get_swapchain().get_backbuffer_views(attachment_info.imageView, depth_attachment_info.imageView);
-      color_attachments.push_back(attachment_info);
-    }
-    else
-    {
-      for (const auto &attachment : m_color_attachments)
-      {
-        color_attachments.push_back({
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = attachment->get_view(),
-            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue =
-                {
-                    .color = m_device->get_swapchain().get_clear_color(),
-                },
-        });
-      }
-      depth_attachment_info.imageView = m_depth_attachment ? m_depth_attachment->get_view() : VK_NULL_HANDLE;
-    }
-
-    const VkRenderingInfo rendering_info{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea =
-            {
-                .extent = m_device->get_swapchain().get_extent(),
-            },
-        .layerCount = 1,
-        .colorAttachmentCount = static_cast<u32>(color_attachments.size()),
-        .pColorAttachments = color_attachments.data(),
-        .pDepthAttachment = m_enable_depth_test ? &depth_attachment_info : nullptr,
-    };
-    vkCmdBeginRendering(cmd, &rendering_info);
-
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_handle);
   }
 
   auto VulkanGraphicsPipeline::end(VkCommandBuffer cmd) -> void
   {
-    vkCmdEndRendering(cmd);
+  }
+
+  auto VulkanComputePipeline::create(VulkanDevice &device, const ComputePipelineDesc &desc)
+      -> Result<VulkanComputePipeline*>
+  {
+    auto result = new VulkanComputePipeline();
+
+    result->m_device = &device;
+
+    Vec<VkPushConstantRange> push_constants;
+    for (const auto &pc : desc.push_constant_ranges)
+      push_constants.push_back({
+          .stageFlags = VulkanBackend::map_shader_stage_enum_to_vk(pc.stages),
+          .offset = pc.offset,
+          .size = pc.size,
+      });
+
+    Vec<const VulkanBindingLayout *> bindings_layouts;
+    for (u32 i = 0; i < desc.binding_layouts.size(); ++i)
+    {
+      bindings_layouts.push_back(reinterpret_cast<VulkanBindingLayout *>(desc.binding_layouts[i]));
+    }
+    AU_TRY_VAR(layout, VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
+    result->m_layout=std::move(layout);
+
+    const auto compute_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.compute_shader);
+
+    VkComputePipelineCreateInfo create_info{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = compute_shader_module->stage_create_info,
+        .layout = result->m_layout.handle,
+    };
+
+    VK_CALL(vkCreateComputePipelines(device.get_handle(), nullptr, 1, &create_info, nullptr, &result->m_handle),
+            "Creating compute pipeline");
+
+    return result;
+  }
+
+  auto VulkanComputePipeline::destroy(VulkanDevice &device) -> void
+  {
+    vkDestroyPipeline(device.get_handle(), m_handle, nullptr);
+    m_layout.destroy(device);
+  }
+
+  auto VulkanComputePipeline::begin(VkCommandBuffer cmd) -> void
+  {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_handle);
+  }
+
+  auto VulkanComputePipeline::end(VkCommandBuffer cmd) -> void
+  {
   }
 
   auto VulkanBackend::create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets,
@@ -407,8 +422,19 @@ namespace ghi
     u32 i{0};
     for (const auto &entries : entry_sets)
     {
-      AU_TRY_VAR(layout, VulkanBindingLayout::create(*dev, entries));
-      *out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout)));
+      auto layout_res = VulkanBindingLayout::create(*dev, entries);
+      if (!layout_res.has_value())
+      {
+        for (u32 j = 0; j < i; ++j)
+        {
+          const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(*out_layouts[j]);
+          layout_impl->destroy(*dev);
+          delete layout_impl;
+          *out_layouts[j] = nullptr;
+        }
+        return layout_res.error();
+      }
+      *out_layouts[i++] = reinterpret_cast<BindingLayout>(new VulkanBindingLayout(std::move(layout_res.value())));
     }
 
     return {};
@@ -434,8 +460,19 @@ namespace ghi
     for (u32 i = 0; i < out_tables.size(); i++)
     {
       const auto layout_impl = reinterpret_cast<VulkanBindingLayout *>(layout);
-      AU_TRY_VAR(table, VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl));
-      *out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table)));
+      auto table_res = VulkanDescriptorTable::create(*dev, is_frame_bound, layout_impl);
+      if (!table_res.has_value())
+      {
+        for (u32 j = 0; j < i; ++j)
+        {
+          const auto table_impl = reinterpret_cast<VulkanDescriptorTable *>(*out_tables[j]);
+          table_impl->destroy(*dev);
+          delete table_impl;
+          *out_tables[j] = nullptr;
+        }
+        return table_res.error();
+      }
+      *out_tables[i] = reinterpret_cast<DescriptorTable>(new VulkanDescriptorTable(std::move(table_res.value())));
     }
 
     return {};
@@ -549,14 +586,31 @@ namespace ghi
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
     AU_TRY_VAR(pipeline, VulkanGraphicsPipeline::create(*dev, desc));
-    return reinterpret_cast<Pipeline>(new VulkanGraphicsPipeline(std::move(pipeline)));
+    return reinterpret_cast<Pipeline>(pipeline);
+  }
+
+  auto VulkanBackend::create_compute_pipeline(Device device, const ComputePipelineDesc &desc) -> Result<Pipeline>
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    AU_TRY_VAR(pipeline, VulkanComputePipeline::create(*dev, desc));
+    return reinterpret_cast<Pipeline>(pipeline);
   }
 
   auto VulkanBackend::destroy_pipeline(Device device, Pipeline pipeline) -> void
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
-    const auto pipeline_impl = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
-    pipeline_impl->destroy(*dev);
-    delete pipeline_impl;
+    const auto pipeline_impl = reinterpret_cast<VulkanPipelineBase *>(pipeline);
+    if (pipeline_impl->get_bind_point() == VK_PIPELINE_BIND_POINT_GRAPHICS)
+    {
+      const auto gfx = static_cast<VulkanGraphicsPipeline*>(pipeline_impl);
+      gfx->destroy(*dev);
+      delete gfx;
+    }
+    else if (pipeline_impl->get_bind_point() == VK_PIPELINE_BIND_POINT_COMPUTE)
+    {
+      const auto comp = static_cast<VulkanComputePipeline*>(pipeline_impl);
+      comp->destroy(*dev);
+      delete comp;
+    }
   }
 } // namespace ghi

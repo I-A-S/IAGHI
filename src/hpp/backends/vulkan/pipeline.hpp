@@ -47,6 +47,7 @@ namespace ghi
   struct VulkanPipelineLayout
   {
     VkPipelineLayout handle{};
+    VkShaderStageFlags push_constant_stages{};
 
     static auto create(VulkanDevice& device, Span<const VulkanBindingLayout*> bindings, Span<const VkPushConstantRange> push_constants)
         -> Result<VulkanPipelineLayout>;
@@ -63,38 +64,97 @@ namespace ghi
     auto destroy(VulkanDevice& device) -> void;
   };
 
-  class VulkanGraphicsPipeline
+  class VulkanPipelineBase
   {
   public:
-    static auto create(VulkanDevice& device, const GraphicsPipelineDesc& desc) -> Result<VulkanGraphicsPipeline>;
+    virtual ~VulkanPipelineBase() = default;
+    virtual auto begin(VkCommandBuffer cmd) -> void = 0;
+    virtual auto end(VkCommandBuffer cmd) -> void = 0;
+
+    virtual auto get_handle() const -> VkPipeline = 0;
+    virtual auto get_layout() const -> VkPipelineLayout = 0;
+    virtual auto get_push_constant_stages() const -> VkShaderStageFlags = 0;
+    virtual auto get_device() const -> VulkanDevice* = 0;
+    virtual auto get_bind_point() const -> VkPipelineBindPoint = 0;
+  };
+
+  class VulkanGraphicsPipeline : public VulkanPipelineBase
+  {
+  public:
+    static auto create(VulkanDevice& device, const GraphicsPipelineDesc& desc) -> Result<VulkanGraphicsPipeline*>;
     auto destroy(VulkanDevice& device) -> void;
 
-    auto begin(VkCommandBuffer cmd) -> void;
-    auto end(VkCommandBuffer cmd) -> void;
+    auto begin(VkCommandBuffer cmd) -> void override;
+    auto end(VkCommandBuffer cmd) -> void override;
 
-    auto get_handle() const -> VkPipeline
+    auto get_handle() const -> VkPipeline override
     {
       return m_handle;
     }
 
-    auto get_layout() const -> VkPipelineLayout
+    auto get_layout() const -> VkPipelineLayout override
     {
       return m_layout.handle;
     }
 
-    auto get_device() const -> VulkanDevice*
+    auto get_push_constant_stages() const -> VkShaderStageFlags override
+    {
+      return m_layout.push_constant_stages;
+    }
+
+    auto get_device() const -> VulkanDevice* override
     {
       return m_device;
+    }
+
+    auto get_bind_point() const -> VkPipelineBindPoint override
+    {
+      return VK_PIPELINE_BIND_POINT_GRAPHICS;
     }
 
   private:
     VulkanDevice* m_device{};
     VkPipeline m_handle{};
     VulkanPipelineLayout m_layout{};
+  };
 
-    bool m_target_swapchain{true};
-    bool m_enable_depth_test{true};
-    VulkanImage* m_depth_attachment{};
-    Vec<VulkanImage*> m_color_attachments;
+  class VulkanComputePipeline : public VulkanPipelineBase
+  {
+  public:
+    static auto create(VulkanDevice& device, const ComputePipelineDesc& desc) -> Result<VulkanComputePipeline*>;
+    auto destroy(VulkanDevice& device) -> void;
+
+    auto begin(VkCommandBuffer cmd) -> void override;
+    auto end(VkCommandBuffer cmd) -> void override;
+
+    auto get_handle() const -> VkPipeline override
+    {
+      return m_handle;
+    }
+
+    auto get_layout() const -> VkPipelineLayout override
+    {
+      return m_layout.handle;
+    }
+
+    auto get_push_constant_stages() const -> VkShaderStageFlags override
+    {
+      return m_layout.push_constant_stages;
+    }
+
+    auto get_device() const -> VulkanDevice* override
+    {
+      return m_device;
+    }
+
+    auto get_bind_point() const -> VkPipelineBindPoint override
+    {
+      return VK_PIPELINE_BIND_POINT_COMPUTE;
+    }
+
+  private:
+    VulkanDevice* m_device{};
+    VkPipeline m_handle{};
+    VulkanPipelineLayout m_layout{};
   };
 }

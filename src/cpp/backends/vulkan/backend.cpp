@@ -438,8 +438,14 @@ namespace ghi
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
-    if (!dev->m_swapchain.advance_frame(*dev)) // [IATODO] change the dev->x(*dev), decouple these after dinner tonight
+    auto advance_res = dev->m_swapchain.advance_frame(dev->m_handle, dev->m_surface);
+    if (!advance_res) return VK_NULL_HANDLE;
+
+    if (!advance_res.value())
+    {
+      (void) dev->m_swapchain.recreate(*dev);
       return VK_NULL_HANDLE;
+    }
 
     const auto &frame = dev->m_swapchain.get_frame();
 
@@ -489,10 +495,12 @@ namespace ghi
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT
+                                                         : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout =
+            dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .image = dev->m_swapchain.m_frames[dev->m_swapchain.m_current_frame_index].swapchain_image,
         .subresourceRange =
             {
@@ -540,9 +548,9 @@ namespace ghi
     const auto extent = dev->get_swapchain().get_extent();
     const u32 format_size = get_format_byte_size(map_vk_to_format_enum(dev->get_swapchain().get_color_format()));
     const u64 expected_size = static_cast<u64>(extent.width) * static_cast<u64>(extent.height) * format_size;
-    
+
     if (out_data.size() < expected_size)
-        return fail("Output buffer is too small for backbuffer copy");
+      return fail("Output buffer is too small for backbuffer copy");
 
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -550,33 +558,39 @@ namespace ghi
         .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     };
     VmaAllocationCreateInfo alloc_info = {
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                 VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO,
     };
     VkBuffer staging_buffer;
     VmaAllocation staging_allocation;
     VmaAllocationInfo staging_alloc_info;
-    VK_CALL(vmaCreateBuffer(dev->get_allocator(), &buffer_info, &alloc_info, &staging_buffer, &staging_allocation, &staging_alloc_info), "Creating staging buffer");
+    VK_CALL(vmaCreateBuffer(dev->get_allocator(), &buffer_info, &alloc_info, &staging_buffer, &staging_allocation,
+                            &staging_alloc_info),
+            "Creating staging buffer");
 
     AU_TRY_DISCARD(dev->execute_single_time_commands([&](VkCommandBuffer cmd) {
       VkImageMemoryBarrier2 barrier = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-          .srcStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+          .srcStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT
+                                                           : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
           .srcAccessMask = 0,
           .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
           .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
-          .oldLayout = dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+          .oldLayout =
+              dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
           .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
           .image = color_img,
-          .subresourceRange = {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
+          .subresourceRange =
+              {
+                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  .baseMipLevel = 0,
+                  .levelCount = 1,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
       };
-      
+
       VkDependencyInfo dep_info = {
           .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
           .imageMemoryBarrierCount = 1,
@@ -588,12 +602,13 @@ namespace ghi
           .bufferOffset = 0,
           .bufferRowLength = 0,
           .bufferImageHeight = 0,
-          .imageSubresource = {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .mipLevel = 0,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
+          .imageSubresource =
+              {
+                  .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  .mipLevel = 0,
+                  .baseArrayLayer = 0,
+                  .layerCount = 1,
+              },
           .imageOffset = {0, 0, 0},
           .imageExtent = {extent.width, extent.height, 1},
       };
@@ -602,11 +617,13 @@ namespace ghi
 
       barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
       barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-      barrier.dstStageMask = dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.dstStageMask =
+          dev->m_surface != VK_NULL_HANDLE ? VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT : VK_PIPELINE_STAGE_2_TRANSFER_BIT;
       barrier.dstAccessMask = 0;
       barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-      barrier.newLayout = dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-      
+      barrier.newLayout =
+          dev->m_surface != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
       vkCmdPipelineBarrier2(cmd, &dep_info);
     }));
 
@@ -616,7 +633,7 @@ namespace ghi
     }
     else
     {
-      void* mapped_data;
+      void *mapped_data;
       vmaMapMemory(dev->get_allocator(), staging_allocation, &mapped_data);
       memcpy(out_data.data(), mapped_data, expected_size);
       vmaUnmapMemory(dev->get_allocator(), staging_allocation);
@@ -625,11 +642,6 @@ namespace ghi
     vmaDestroyBuffer(dev->get_allocator(), staging_buffer, staging_allocation);
 
     return {};
-  }
-
-  auto VulkanBackend::set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a) -> void
-  {
-    reinterpret_cast<VulkanDevice *>(device)->get_swapchain().set_clear_color(r, g, b, a);
   }
 
   auto VulkanBackend::execute_single_time_commands(Device device,
@@ -687,41 +699,124 @@ namespace ghi
 
   auto VulkanBackend::cmd_begin_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void
   {
-    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    const auto p = reinterpret_cast<VulkanPipelineBase *>(pipeline);
     p->begin(reinterpret_cast<VkCommandBuffer>(cmd));
   }
 
   auto VulkanBackend::cmd_end_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void
   {
-    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    const auto p = reinterpret_cast<VulkanPipelineBase *>(pipeline);
     p->end(reinterpret_cast<VkCommandBuffer>(cmd));
+  }
+
+  auto VulkanBackend::cmd_begin_rendering(Device device, CommandBuffer cmd, const RenderingInfo &info) -> void
+  {
+    const auto dev = reinterpret_cast<VulkanDevice *>(device);
+    const auto vk_cmd = reinterpret_cast<VkCommandBuffer>(cmd);
+
+    Vec<VkRenderingAttachmentInfo> color_attachments;
+    color_attachments.reserve(info.color_attachments.size());
+
+    for (const auto &attachment : info.color_attachments)
+    {
+      VkImageView view = VK_NULL_HANDLE;
+      if (attachment.texture)
+      {
+        view = reinterpret_cast<VulkanImage *>(attachment.texture)->get_view();
+      }
+      else
+      {
+        VkImageView depth_view;
+        dev->get_swapchain().get_backbuffer_views(view, depth_view);
+      }
+
+      color_attachments.push_back({
+          .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+          .imageView = view,
+          .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+          .loadOp = attachment.load_op_clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+          .storeOp = attachment.store_op_store ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+          .clearValue =
+              {
+                  .color = {attachment.clear_color[0], attachment.clear_color[1], attachment.clear_color[2],
+                            attachment.clear_color[3]},
+              },
+      });
+    }
+
+    VkRenderingAttachmentInfo depth_attachment_info{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
+    if (info.depth_attachment)
+    {
+      VkImageView view = VK_NULL_HANDLE;
+      if (info.depth_attachment->texture)
+      {
+        view = reinterpret_cast<VulkanImage *>(info.depth_attachment->texture)->get_view();
+      }
+      else
+      {
+        VkImageView color_view;
+        dev->get_swapchain().get_backbuffer_views(color_view, view);
+      }
+
+      depth_attachment_info.imageView = view;
+      depth_attachment_info.loadOp =
+          info.depth_attachment->load_op_clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+      depth_attachment_info.storeOp =
+          info.depth_attachment->store_op_store ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
+      depth_attachment_info.clearValue = {
+          .depthStencil = {info.depth_attachment->clear_depth, 0},
+      };
+    }
+
+    const VkRenderingInfo rendering_info{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea =
+            {
+                .extent = {info.width, info.height},
+            },
+        .layerCount = 1,
+        .colorAttachmentCount = static_cast<u32>(color_attachments.size()),
+        .pColorAttachments = color_attachments.data(),
+        .pDepthAttachment = info.depth_attachment ? &depth_attachment_info : nullptr,
+    };
+
+    vkCmdBeginRendering(vk_cmd, &rendering_info);
+  }
+
+  auto VulkanBackend::cmd_end_rendering(CommandBuffer cmd) -> void
+  {
+    vkCmdEndRendering(reinterpret_cast<VkCommandBuffer>(cmd));
   }
 
   auto VulkanBackend::cmd_push_constants(CommandBuffer cmd, Pipeline pipeline, u32 offset, u32 size, const void *data)
       -> void
   {
-    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
-    vkCmdPushConstants(reinterpret_cast<VkCommandBuffer>(cmd), p->get_layout(),
-                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, offset, size, data);
+    const auto p = reinterpret_cast<VulkanPipelineBase *>(pipeline);
+    vkCmdPushConstants(reinterpret_cast<VkCommandBuffer>(cmd), p->get_layout(), p->get_push_constant_stages(), offset, size, data);
   }
 
   auto VulkanBackend::cmd_bind_frame_bound_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline,
                                                             DescriptorTable table) -> void
   {
-    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    const auto p = reinterpret_cast<VulkanPipelineBase *>(pipeline);
     const auto *impl = reinterpret_cast<VulkanDescriptorTable *>(table);
-    vkCmdBindDescriptorSets(reinterpret_cast<VkCommandBuffer>(cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, p->get_layout(),
-                            set_index, 1, &impl->handles[p->get_device()->get_swapchain().get_current_frame_index()], 0,
-                            nullptr);
+    const auto frame_index = impl->handle_count == 1 ? 0 : p->get_device()->get_swapchain().get_current_frame_index();
+    vkCmdBindDescriptorSets(reinterpret_cast<VkCommandBuffer>(cmd), p->get_bind_point(), p->get_layout(), set_index, 1,
+                            &impl->handles[frame_index], 0, nullptr);
   }
 
   auto VulkanBackend::cmd_bind_descriptor_table(CommandBuffer cmd, u32 set_index, Pipeline pipeline,
                                                 DescriptorTable table, Span<const u32> offsets) -> void
   {
-    const auto p = reinterpret_cast<VulkanGraphicsPipeline *>(pipeline);
+    const auto p = reinterpret_cast<VulkanPipelineBase *>(pipeline);
     const auto *impl = reinterpret_cast<VulkanDescriptorTable *>(table);
-    vkCmdBindDescriptorSets(reinterpret_cast<VkCommandBuffer>(cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, p->get_layout(),
-                            set_index, 1, &impl->handles[0], offsets.size(), offsets.data());
+    const auto frame_index = impl->handle_count == 1 ? 0 : p->get_device()->get_swapchain().get_current_frame_index();
+    vkCmdBindDescriptorSets(reinterpret_cast<VkCommandBuffer>(cmd), p->get_bind_point(), p->get_layout(), set_index, 1,
+                            &impl->handles[frame_index], offsets.size(), offsets.data());
   }
 
   auto VulkanBackend::cmd_set_viewport(CommandBuffer cmd, f32 x, f32 y, f32 w, f32 h) -> void
@@ -767,6 +862,11 @@ namespace ghi
 
     const auto *impl = reinterpret_cast<VulkanBuffer *>(indirect_buffer);
     vkCmdDrawIndexedIndirect(reinterpret_cast<VkCommandBuffer>(cmd), impl->get_handle(), offset, draw_count, stride);
+  }
+
+  auto VulkanBackend::cmd_dispatch(CommandBuffer cmd, u32 group_count_x, u32 group_count_y, u32 group_count_z) -> void
+  {
+    vkCmdDispatch(reinterpret_cast<VkCommandBuffer>(cmd), group_count_x, group_count_y, group_count_z);
   }
 
   auto VulkanBackend::cmd_pipeline_barrier(CommandBuffer cmd, Span<const BufferBarrier> buffer_barriers,
@@ -832,8 +932,8 @@ namespace ghi
           .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
           .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
           .buffer = impl->get_handle(),
-          .offset = 0,
-          .size = impl->get_size(),
+          .offset = desc.offset,
+          .size = desc.size == ~0ull ? VK_WHOLE_SIZE : desc.size,
       };
 
       buffers.push_back(barrier);
@@ -868,10 +968,10 @@ namespace ghi
           .subresourceRange =
               {
                   .aspectMask = aspect_mask,
-                  .baseMipLevel = 0,
-                  .levelCount = VK_REMAINING_MIP_LEVELS,
-                  .baseArrayLayer = 0,
-                  .layerCount = VK_REMAINING_ARRAY_LAYERS,
+                  .baseMipLevel = desc.base_mip,
+                  .levelCount = desc.mip_count == ~0u ? VK_REMAINING_MIP_LEVELS : desc.mip_count,
+                  .baseArrayLayer = desc.base_layer,
+                  .layerCount = desc.layer_count == ~0u ? VK_REMAINING_ARRAY_LAYERS : desc.layer_count,
               },
       };
 

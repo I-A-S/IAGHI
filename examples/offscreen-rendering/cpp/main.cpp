@@ -52,7 +52,8 @@ void main()
 }
 )";
 
-  struct Vertex {
+  struct Vertex
+  {
     glm::vec2 pos;
     glm::vec3 color;
   };
@@ -61,7 +62,7 @@ void main()
   {
     auto &logger = auxid::get_thread_logger();
 
-    ghi::InitInfo init_info{
+    InitInfo init_info{
         .app_name = "IAGHI Offscreen Rendering",
         .validation_enabled = true,
         .surface_width = 800,
@@ -70,11 +71,9 @@ void main()
         .surface_creation_callback_user_data = nullptr,
     };
 
-    AU_TRY_VAR(const device, ghi::create_device(init_info));
+    AU_TRY_VAR(const device, create_device(init_info));
 
-    AU_TRY_DISCARD(ghi::utils::initialize(device));
-
-    ghi::set_clear_color(device, 0.2f, 0.3f, 0.4f, 1.0f);
+    AU_TRY_DISCARD(utils::initialize(device));
 
     AU_TRY_VAR(const vertex_shader, utils::create_shader_from_glsl(device, VERTEX_SHADER_SRC, EShaderStage::Vertex));
     AU_TRY_VAR(const fragment_shader,
@@ -91,7 +90,7 @@ void main()
         {.location = 1, .binding = 0, .format = EFormat::R32G32B32Float, .offset = offsetof(Vertex, color)},
     };
 
-    ghi::GraphicsPipelineDesc pipeline_desc{
+    GraphicsPipelineDesc pipeline_desc{
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
 
@@ -102,9 +101,9 @@ void main()
         .vertex_attributes = {vertex_input_attributes},
         .push_constant_ranges = {},
     };
-    AU_TRY_VAR(const pipeline, ghi::create_graphics_pipeline(device, pipeline_desc));
+    AU_TRY_VAR(const pipeline, create_graphics_pipeline(device, pipeline_desc));
 
-    ghi::destroy_shaders(device, {vertex_shader, fragment_shader});
+    destroy_shaders(device, {vertex_shader, fragment_shader});
 
     au::Vec<Vertex> vertices = {
         {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -112,68 +111,92 @@ void main()
         {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     };
 
-    AU_TRY_VAR(vertex_buffer, ghi::utils::create_device_local_buffer(device, EBufferUsage::Vertex, sizeof(Vertex) * vertices.size(),
-                                                                     vertices.data(), sizeof(Vertex) * vertices.size()));
+    AU_TRY_VAR(vertex_buffer,
+               utils::create_device_local_buffer(device, EBufferUsage::Vertex, sizeof(Vertex) * vertices.size(),
+                                                 vertices.data(), sizeof(Vertex) * vertices.size()));
 
     logger.info("successfully initialized offscreen-rendering");
 
-    const auto cmd = ghi::begin_frame(device);
+    const auto cmd = begin_frame(device);
 
-    ghi::cmd_begin_pipeline(cmd, pipeline);
+    cmd_begin_pipeline(cmd, pipeline);
 
     u32 width = 800, height = 600;
-    ghi::get_swapchain_extent(device, width, height);
+    get_swapchain_extent(device, width, height);
 
-    ghi::cmd_set_viewport(cmd, 0, 0, (f32)width, (f32)height);
-    ghi::cmd_set_scissor(cmd, 0, 0, width, height);
+    ColorAttachment color_attachment{
+        .texture = nullptr,
+        .clear_color = {0.0f, 0.0f, 0.0f, 1.0f},
+        .load_op_clear = true,
+        .store_op_store = true,
+    };
 
-    ghi::cmd_bind_vertex_buffers(cmd, 0, {vertex_buffer}, {0});
+    RenderingInfo rendering_info{
+        .width = width,
+        .height = height,
+        .color_attachments = {color_attachment},
+        .depth_attachment = nullptr,
+    };
 
-    ghi::cmd_draw(cmd, 3, 1, 0, 0);
+    cmd_begin_rendering(device, cmd, rendering_info);
 
-    ghi::cmd_end_pipeline(cmd, pipeline);
+    cmd_set_viewport(cmd, 0, 0, (f32) width, (f32) height);
+    cmd_set_scissor(cmd, 0, 0, width, height);
 
-    ghi::end_frame(device);
-    ghi::wait_idle(device);
+    cmd_bind_vertex_buffers(cmd, 0, {vertex_buffer}, {0});
+
+    cmd_draw(cmd, 3, 1, 0, 0);
+
+    cmd_end_rendering(cmd);
+
+    cmd_end_pipeline(cmd, pipeline);
+
+    end_frame(device);
+    wait_idle(device);
 
     // Read back the rendered image
     std::vector<u8> pixels;
     pixels.resize(width * height * 4);
-    AU_TRY_DISCARD(ghi::copy_backbuffer_to_cpu(device, pixels));
+    AU_TRY_DISCARD(copy_backbuffer_to_cpu(device, pixels));
 
     // Save to PPM
     std::ofstream ppm("output.ppm", std::ios::binary);
     ppm << "P6\n" << width << " " << height << "\n255\n";
-    
-    EFormat format = ghi::get_swapchain_format(device);
+
+    EFormat format = get_swapchain_format(device);
     bool is_bgra = (format == EFormat::B8G8R8A8Unorm || format == EFormat::B8G8R8A8Srgb);
 
-    for (u32 y = 0; y < height; ++y) {
-        for (u32 x = 0; x < width; ++x) {
-            u32 idx = (y * width + x) * 4;
-            u8 r, g, b;
-            if (is_bgra) {
-                b = pixels[idx + 0];
-                g = pixels[idx + 1];
-                r = pixels[idx + 2];
-            } else {
-                r = pixels[idx + 0];
-                g = pixels[idx + 1];
-                b = pixels[idx + 2];
-            }
-            ppm.write(reinterpret_cast<char*>(&r), 1);
-            ppm.write(reinterpret_cast<char*>(&g), 1);
-            ppm.write(reinterpret_cast<char*>(&b), 1);
+    for (u32 y = 0; y < height; ++y)
+    {
+      for (u32 x = 0; x < width; ++x)
+      {
+        u32 idx = (y * width + x) * 4;
+        u8 r, g, b;
+        if (is_bgra)
+        {
+          b = pixels[idx + 0];
+          g = pixels[idx + 1];
+          r = pixels[idx + 2];
         }
+        else
+        {
+          r = pixels[idx + 0];
+          g = pixels[idx + 1];
+          b = pixels[idx + 2];
+        }
+        ppm.write(reinterpret_cast<char *>(&r), 1);
+        ppm.write(reinterpret_cast<char *>(&g), 1);
+        ppm.write(reinterpret_cast<char *>(&b), 1);
+      }
     }
     ppm.close();
 
     logger.info("Saved offscreen render to output.ppm");
 
-    ghi::utils::shutdown(device);
-    ghi::destroy_pipeline(device, pipeline);
-    ghi::destroy_buffers(device, {vertex_buffer});
-    ghi::destroy_device(device);
+    utils::shutdown(device);
+    destroy_pipeline(device, pipeline);
+    destroy_buffers(device, {vertex_buffer});
+    destroy_device(device);
 
     logger.info("cleanly exited offscreen-rendering");
 

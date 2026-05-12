@@ -55,6 +55,7 @@ public:
     static auto map_frame_bound_buffer(Device device, Buffer buffer) -> void *;
     static auto map_buffer(Device device, Buffer buffer) -> void *;
     static auto unmap_buffer(Device device, Buffer buffer) -> void;
+    static auto invalidate_buffer(Device device, Buffer buffer) -> void;
 
     static auto create_images(Device device, Span<const ImageDesc> descs, Span<Image* const> out_handles) -> Result<void>;
     static auto destroy_images(Device device, Span<const Image> handles) -> void;
@@ -76,6 +77,7 @@ public:
     static auto destroy_shaders(Device device, Span<const Shader> shaders) -> void;
 
     static auto create_graphics_pipeline(Device device, const GraphicsPipelineDesc &desc) -> Result<Pipeline>;
+    static auto create_compute_pipeline(Device device, const ComputePipelineDesc &desc) -> Result<Pipeline>;
     static auto destroy_pipeline(Device device, Pipeline pipeline) -> void;
 
     static auto resize_swapchain(Device device, u32 width, u32 height) -> Result<void>;
@@ -90,7 +92,6 @@ public:
     static auto copy_backbuffer_to_cpu(Device device, Span<u8> out_data) -> Result<void>;
 
     static auto wait_idle(Device device) -> void;
-    static auto set_clear_color(Device device, f32 r, f32 g, f32 b, f32 a = 1.0f) -> void;
 
     static auto execute_single_time_commands(Device device, const std::function<void(CommandBuffer)> &commands_callback)
         -> Result<void>;
@@ -104,6 +105,9 @@ public:
 
     static auto cmd_begin_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void;
     static auto cmd_end_pipeline(CommandBuffer cmd, Pipeline pipeline) -> void;
+
+    static auto cmd_begin_rendering(Device device, CommandBuffer cmd, const RenderingInfo &info) -> void;
+    static auto cmd_end_rendering(CommandBuffer cmd) -> void;
 
     static auto cmd_push_constants(CommandBuffer cmd, Pipeline pipeline, u32 offset, u32 size, const void *data)
         -> void;
@@ -122,6 +126,7 @@ public:
                                  u32 first_vertex, u32 first_instance) -> void;
     static auto cmd_draw_indexed_indirect(CommandBuffer cmd, Buffer indirect_buffer, u64 offset, u32 draw_count,
                                           u32 stride) -> void;
+    static auto cmd_dispatch(CommandBuffer cmd, u32 group_count_x, u32 group_count_y, u32 group_count_z) -> void;
 
     static auto cmd_pipeline_barrier(CommandBuffer cmd, Span<const BufferBarrier> buffer_barriers,
                                      Span<const ImageBarrier> image_barriers) -> void;
