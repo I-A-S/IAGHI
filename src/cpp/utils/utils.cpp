@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define STBIDEF static
 #define STB_IMAGE_IMPLEMENTATION
 
 #include <iaghi/utils.hpp>
