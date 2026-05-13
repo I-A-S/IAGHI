@@ -20,13 +20,6 @@ FetchContent_MakeAvailable(volk VulkanMemoryAllocator)
 
 if(IAGHI_BUILD_UTILS)
     FetchContent_Declare(
-            DearImGui_CMake
-            GIT_REPOSITORY https://github.com/I-A-S/imgui-cmake
-            GIT_TAG        main
-            OVERRIDE_FIND_PACKAGE
-    )
-
-    FetchContent_Declare(
             STB_CMake
             GIT_REPOSITORY https://github.com/I-A-S/stb-cmake
             GIT_TAG        main
@@ -41,7 +34,7 @@ if(IAGHI_BUILD_UTILS)
             EXCLUDE_FROM_ALL
     )
 
-    FetchContent_MakeAvailable(STB_CMake DearImGui_CMake spirv-headers)
+    FetchContent_MakeAvailable(STB_CMake spirv-headers)
 
     FetchContent_Declare(
             spirv-tools
@@ -70,6 +63,13 @@ endif ()
 
 if(IAGHI_BUILD_SANDBOX OR IAGHI_BUILD_EXAMPLES)
     FetchContent_Declare(
+            DearImGui_CMake
+            GIT_REPOSITORY https://github.com/I-A-S/imgui-cmake
+            GIT_TAG        main
+            OVERRIDE_FIND_PACKAGE
+    )
+
+    FetchContent_Declare(
             SDL
             GIT_REPOSITORY https://github.com/libsdl-org/SDL
             GIT_TAG        main
@@ -83,5 +83,5 @@ if(IAGHI_BUILD_SANDBOX OR IAGHI_BUILD_EXAMPLES)
             OVERRIDE_FIND_PACKAGE
     )
 
-    FetchContent_MakeAvailable(SDL glm)
+    FetchContent_MakeAvailable(SDL glm DearImGui_CMake)
 endif()
