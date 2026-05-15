@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #include <auxid/auxid.hpp>
 #include <auxid/containers/vec.hpp>
@@ -309,14 +301,20 @@ void main()
       if (offscreen_depth)
         destroy_images(device, {offscreen_depth});
 
-      ImageDesc color_desc{
-          .width = width, .height = height, .format = EFormat::R8G8B8A8Unorm, .usage = EImageUsage::ColorTarget | EImageUsage::Sampled, .debug_name = "offscreen_color"};
-      ImageDesc depth_desc{
-          .width = width, .height = height, .format = EFormat::D32Sfloat, .usage = EImageUsage::DepthTarget | EImageUsage::Sampled, .debug_name = "offscreen_depth"};
+      ImageDesc color_desc{.width = width,
+                           .height = height,
+                           .format = EFormat::R8G8B8A8Unorm,
+                           .usage = EImageUsage::ColorTarget | EImageUsage::Sampled,
+                           .debug_name = "offscreen_color"};
+      ImageDesc depth_desc{.width = width,
+                           .height = height,
+                           .format = EFormat::D32Sfloat,
+                           .usage = EImageUsage::DepthTarget | EImageUsage::Sampled,
+                           .debug_name = "offscreen_depth"};
 
-        Image* handles[2] = {&offscreen_color, &offscreen_depth};
-        ImageDesc descs[2] = {color_desc, depth_desc};
-        AU_TRY_DISCARD(create_images(device, descs, handles));
+      Image *handles[2] = {&offscreen_color, &offscreen_depth};
+      ImageDesc descs[2] = {color_desc, depth_desc};
+      AU_TRY_DISCARD(create_images(device, descs, handles));
 
       DescriptorUpdate update{.table = postprocess_descriptor_table,
                               .binding = 0,

@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #include <backends/vulkan/image.hpp>
 #include <backends/vulkan/device.hpp>
@@ -83,7 +75,8 @@ namespace ghi
     m_handle = VK_NULL_HANDLE;
   }
 
-  auto VulkanBackend::create_images(Device device, Span<const ImageDesc> descs, Span<Image* const> out_handles) -> Result<void>
+  auto VulkanBackend::create_images(Device device, Span<const ImageDesc> descs, Span<Image *const> out_handles)
+      -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
@@ -99,15 +92,14 @@ namespace ghi
         usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
       if (static_cast<int>(desc.usage) & static_cast<int>(EImageUsage::DepthTarget))
         usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        
+
       VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
       if (VulkanBackend::is_vk_depth_format(map_format_enum_to_vk(desc.format)))
         aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-      auto image_res = VulkanImage::create(
-          dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format), {desc.width, desc.height, desc.depth},
-          usage, aspect, desc.array_layers,
-          desc.mip_levels); // [IATODO]: Use ETextureType
+      auto image_res = VulkanImage::create(dev->m_handle, dev->m_allocator, map_format_enum_to_vk(desc.format),
+                                           {desc.width, desc.height, desc.depth}, usage, aspect, desc.array_layers,
+                                           desc.mip_levels); // [IATODO]: Use ETextureType
       if (!image_res.has_value())
       {
         for (u32 j = 0; j < i; ++j)
@@ -325,7 +317,8 @@ namespace ghi
 
             VkFormatProperties formatProperties;
             vkGetPhysicalDeviceFormatProperties(dev->m_physical_device, impl->get_format(), &formatProperties);
-            bool supportsLinearFiltering = (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
+            bool supportsLinearFiltering =
+                (formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
             VkFilter blitFilter = supportsLinearFiltering ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
 
             for (u32 j = 1; j < impl->get_mip_level_count(); j++)
@@ -393,7 +386,7 @@ namespace ghi
     return {};
   }
 
-  auto VulkanBackend::create_samplers(Device device, Span<const SamplerDesc> descs, Span<Sampler* const> out_handles)
+  auto VulkanBackend::create_samplers(Device device, Span<const SamplerDesc> descs, Span<Sampler *const> out_handles)
       -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);

@@ -3,7 +3,6 @@
   <br/>
   <br/>
 
-  <img src="https://img.shields.io/badge/license-Apache_v2-darkblue.svg" alt="License"/>
   <img src="https://img.shields.io/badge/standard-C%2B%2B20-darkred.svg" alt="C++ Standard"/>
   <img src="https://img.shields.io/badge/compiler-MSVC_|_Clang-darkgreen.svg" alt="Compiler"/>
 
@@ -141,4 +140,4 @@ Issues and feature requests are very welcome! However, contributions to the core
 
 ## **License**
 
-Copyright © 2026 IASoft (PVT) LTD. Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+Copyright © 2026 IASoft (PVT) LTD. Licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0).

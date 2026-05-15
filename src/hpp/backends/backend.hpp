@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #pragma once
 
@@ -27,7 +19,8 @@ namespace ghi
     { BackendT::destroy_device(std::declval<Device>()) } -> std::same_as<void>;
 
     {
-      BackendT::create_buffers(std::declval<Device>(), std::declval<Span<const BufferDesc>>(), std::declval<Span<Buffer* const>>())
+      BackendT::create_buffers(std::declval<Device>(), std::declval<Span<const BufferDesc>>(),
+                               std::declval<Span<Buffer *const>>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_buffers(std::declval<Device>(), std::declval<Span<const Buffer>>()) } -> std::same_as<void>;
     { BackendT::map_frame_bound_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void *>;
@@ -36,7 +29,8 @@ namespace ghi
     { BackendT::invalidate_buffer(std::declval<Device>(), std::declval<Buffer>()) } -> std::same_as<void>;
 
     {
-      BackendT::create_images(std::declval<Device>(), std::declval<Span<const ImageDesc>>(), std::declval<Span<Image* const>>())
+      BackendT::create_images(std::declval<Device>(), std::declval<Span<const ImageDesc>>(),
+                              std::declval<Span<Image *const>>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_images(std::declval<Device>(), std::declval<Span<const Image>>()) } -> std::same_as<void>;
     {
@@ -46,13 +40,14 @@ namespace ghi
 
     {
       BackendT::create_samplers(std::declval<Device>(), std::declval<Span<const SamplerDesc>>(),
-                                std::declval<Span<Sampler* const>>())
+                                std::declval<Span<Sampler *const>>())
     } -> std::same_as<Result<void>>;
     { BackendT::destroy_samplers(std::declval<Device>(), std::declval<Span<const Sampler>>()) } -> std::same_as<void>;
 
     {
-      BackendT::create_binding_layouts(std::declval<Device>(), std::declval<Span<const Span<const BindingLayoutEntry>>>(),
-                                       std::declval<Span<BindingLayout* const>>())
+      BackendT::create_binding_layouts(std::declval<Device>(),
+                                       std::declval<Span<const Span<const BindingLayoutEntry>>>(),
+                                       std::declval<Span<BindingLayout *const>>())
     } -> std::same_as<Result<void>>;
     {
       BackendT::destroy_binding_layouts(std::declval<Device>(), std::declval<Span<const BindingLayout>>())
@@ -60,7 +55,7 @@ namespace ghi
 
     {
       BackendT::create_descriptor_tables(std::declval<Device>(), std::declval<bool>(), std::declval<BindingLayout>(),
-                                         std::declval<Span<DescriptorTable* const>>())
+                                         std::declval<Span<DescriptorTable *const>>())
     } -> std::same_as<Result<void>>;
     {
       BackendT::update_descriptor_tables(std::declval<Device>(), std::declval<Span<const DescriptorUpdate>>())
@@ -120,7 +115,8 @@ namespace ghi
     { BackendT::cmd_end_pipeline(std::declval<CommandBuffer>(), std::declval<Pipeline>()) } -> std::same_as<void>;
 
     {
-      BackendT::cmd_begin_rendering(std::declval<Device>(), std::declval<CommandBuffer>(), std::declval<const RenderingInfo &>())
+      BackendT::cmd_begin_rendering(std::declval<Device>(), std::declval<CommandBuffer>(),
+                                    std::declval<const RenderingInfo &>())
     } -> std::same_as<void>;
     { BackendT::cmd_end_rendering(std::declval<CommandBuffer>()) } -> std::same_as<void>;
 
@@ -162,7 +158,8 @@ namespace ghi
     } -> std::same_as<void>;
 
     {
-      BackendT::cmd_dispatch(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<u32>(), std::declval<u32>())
+      BackendT::cmd_dispatch(std::declval<CommandBuffer>(), std::declval<u32>(), std::declval<u32>(),
+                             std::declval<u32>())
     } -> std::same_as<void>;
 
     {

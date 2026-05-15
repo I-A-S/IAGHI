@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #include <backends/vulkan/swapchain.hpp>
 #include <backends/vulkan/device.hpp>
@@ -24,17 +16,18 @@ namespace ghi
   {
     VulkanSwapchain result{};
 
-    VkFormat depth_formats[] = {VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D16_UNORM_S8_UINT, VK_FORMAT_D32_SFLOAT};
+    VkFormat depth_formats[] = {VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_D16_UNORM_S8_UINT,
+                                VK_FORMAT_D32_SFLOAT};
     result.m_depth_format = VK_FORMAT_D32_SFLOAT_S8_UINT;
     for (auto format : depth_formats)
     {
-        VkFormatProperties props;
-        vkGetPhysicalDeviceFormatProperties(device.m_physical_device, format, &props);
-        if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-        {
-            result.m_depth_format = format;
-            break;
-        }
+      VkFormatProperties props;
+      vkGetPhysicalDeviceFormatProperties(device.m_physical_device, format, &props);
+      if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+      {
+        result.m_depth_format = format;
+        break;
+      }
     }
 
     if (device.m_surface != VK_NULL_HANDLE)
@@ -122,23 +115,23 @@ namespace ghi
     {
       if (frame.depth_image.get_handle() != VK_NULL_HANDLE)
         frame.depth_image.destroy(device.m_handle, device.m_allocator);
-        
+
       if (device.m_surface == VK_NULL_HANDLE && frame.offscreen_color_image.get_handle() != VK_NULL_HANDLE)
         frame.offscreen_color_image.destroy(device.m_handle, device.m_allocator);
 
       if (frame.render_finished_semaphore != VK_NULL_HANDLE)
         vkDestroySemaphore(device.m_handle, frame.render_finished_semaphore, nullptr);
-        
+
       vkDestroyFence(device.m_handle, frame.in_use_fence, nullptr);
       vkDestroyCommandPool(device.m_handle, frame.command_pool, nullptr);
-      
+
       if (device.m_surface != VK_NULL_HANDLE && frame.swapchain_image_view != VK_NULL_HANDLE)
         vkDestroyImageView(device.m_handle, frame.swapchain_image_view, nullptr);
-        
+
       if (frame.image_available_semaphore != VK_NULL_HANDLE)
         vkDestroySemaphore(device.m_handle, frame.image_available_semaphore, nullptr);
     }
-    
+
     if (m_handle != VK_NULL_HANDLE)
       vkDestroySwapchainKHR(device.m_handle, m_handle, nullptr);
   }
@@ -237,10 +230,11 @@ namespace ghi
     {
       for (u32 i = 0; i < m_buffer_count; ++i)
       {
-        AU_TRY_VAR(color_image, VulkanImage::create(device.m_handle, device.m_allocator, m_format,
-                                                    {.width = m_extent.width, .height = m_extent.height, .depth = 1},
-                                                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
-        
+        AU_TRY_VAR(color_image,
+                   VulkanImage::create(device.m_handle, device.m_allocator, m_format,
+                                       {.width = m_extent.width, .height = m_extent.height, .depth = 1},
+                                       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+
         m_frames[i].offscreen_color_image = std::move(color_image);
         m_frames[i].swapchain_image = m_frames[i].offscreen_color_image.get_handle();
         m_frames[i].swapchain_image_view = m_frames[i].offscreen_color_image.get_view();
@@ -262,11 +256,11 @@ namespace ghi
         m_frames[i].image_available_semaphore = VK_NULL_HANDLE;
       }
 
-       
-          AU_TRY_VAR(depth_image, VulkanImage::create(device.m_handle, device.m_allocator, m_depth_format,
-                                     {.width = m_extent.width, .height = m_extent.height, .depth = 1},
-                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT));
-          m_frames[i].depth_image=std::move(depth_image);
+      AU_TRY_VAR(depth_image, VulkanImage::create(device.m_handle, device.m_allocator, m_depth_format,
+                                                  {.width = m_extent.width, .height = m_extent.height, .depth = 1},
+                                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT));
+      m_frames[i].depth_image = std::move(depth_image);
     }
 
     Vec<ImageBarrier> depth_barriers;
@@ -278,9 +272,8 @@ namespace ghi
           .new_state = EResourceState::DepthTarget,
       });
     }
-    AU_TRY_DISCARD(device.execute_single_time_commands([&](VkCommandBuffer cmd) {
-      cmd_pipeline_barrier(reinterpret_cast<CommandBuffer>(cmd), {}, depth_barriers);
-    }));
+    AU_TRY_DISCARD(device.execute_single_time_commands(
+        [&](VkCommandBuffer cmd) { cmd_pipeline_barrier(reinterpret_cast<CommandBuffer>(cmd), {}, depth_barriers); }));
 
     logger.info("recreated swapchain (%ux%ux%u)", m_extent.width, m_extent.height, create_info.minImageCount);
 

@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #pragma once
 
@@ -34,7 +26,7 @@
 
 #define VK_ENUM_CALL(call, result, ...)                                                                                \
   {                                                                                                                    \
-    u32 __count;                                                                                                    \
+    u32 __count;                                                                                                       \
     call(__VA_ARGS__, &__count, nullptr);                                                                              \
     result.resize(__count);                                                                                            \
     call(__VA_ARGS__, &__count, result.data());                                                                        \
@@ -50,27 +42,30 @@ public:
     static auto create_device(const InitInfo &init_info) -> Result<Device>;
     static auto destroy_device(Device device) -> void;
 
-    static auto create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer* const> out_handles) -> Result<void>;
+    static auto create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer *const> out_handles)
+        -> Result<void>;
     static auto destroy_buffers(Device device, Span<const Buffer> handles) -> void;
     static auto map_frame_bound_buffer(Device device, Buffer buffer) -> void *;
     static auto map_buffer(Device device, Buffer buffer) -> void *;
     static auto unmap_buffer(Device device, Buffer buffer) -> void;
     static auto invalidate_buffer(Device device, Buffer buffer) -> void;
 
-    static auto create_images(Device device, Span<const ImageDesc> descs, Span<Image* const> out_handles) -> Result<void>;
+    static auto create_images(Device device, Span<const ImageDesc> descs, Span<Image *const> out_handles)
+        -> Result<void>;
     static auto destroy_images(Device device, Span<const Image> handles) -> void;
     static auto upload_image_data(Device device, Span<const Image> handles, Span<const u8 *const> image_data,
                                   bool generate_mip_maps) -> Result<void>;
 
-    static auto create_samplers(Device device, Span<const SamplerDesc> descs, Span<Sampler* const> out_handles) -> Result<void>;
+    static auto create_samplers(Device device, Span<const SamplerDesc> descs, Span<Sampler *const> out_handles)
+        -> Result<void>;
     static auto destroy_samplers(Device device, Span<const Sampler> handles) -> void;
 
     static auto create_binding_layouts(Device device, Span<const Span<const BindingLayoutEntry>> entry_sets,
-                                       Span<BindingLayout* const> out_layouts) -> Result<void>;
+                                       Span<BindingLayout *const> out_layouts) -> Result<void>;
     static auto destroy_binding_layouts(Device device, Span<const BindingLayout> layouts) -> void;
 
     static auto create_descriptor_tables(Device device, bool is_frame_bound, BindingLayout layout,
-                                         Span<DescriptorTable* const> out_tables) -> Result<void>;
+                                         Span<DescriptorTable *const> out_tables) -> Result<void>;
     static auto update_descriptor_tables(Device device, Span<const DescriptorUpdate> updates) -> void;
 
     static auto create_shader(Device device, const void *spirv_code, usize size, EShaderStage stage) -> Result<Shader>;

@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #include <backends/vulkan/buffer.hpp>
 #include <backends/vulkan/device.hpp>
@@ -44,10 +36,9 @@ namespace ghi
     };
 
     VmaAllocationCreateInfo alloc_create_info{
-        .flags = host_visible
-                     ? static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
-                                                             VMA_ALLOCATION_CREATE_MAPPED_BIT)
-                     : static_cast<VmaAllocationCreateFlags>(0),
+        .flags = host_visible ? static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+                                                                      VMA_ALLOCATION_CREATE_MAPPED_BIT)
+                              : static_cast<VmaAllocationCreateFlags>(0),
         .usage = host_visible ? VMA_MEMORY_USAGE_AUTO : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
     };
 
@@ -132,7 +123,8 @@ namespace ghi
     vmaInvalidateAllocation(m_device_ref.get_allocator(), m_allocation, offset, size);
   }
 
-  auto VulkanBackend::create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer* const> out_handles) -> Result<void>
+  auto VulkanBackend::create_buffers(Device device, Span<const BufferDesc> descs, Span<Buffer *const> out_handles)
+      -> Result<void>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
 
@@ -144,8 +136,9 @@ namespace ghi
 
       const auto is_frame_bound = (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundUniform)) ||
                                   (static_cast<u32>(desc.usage) & static_cast<u32>(EBufferUsage::FrameBoundStorage));
-      auto buffer_res = VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
-                                      is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name);
+      auto buffer_res =
+          VulkanBuffer::create(*dev, desc.size_bytes, map_buffer_usage_enum_to_vk(static_cast<u32>(desc.usage)),
+                               is_dynamic, is_frame_bound, desc.cpu_visible, desc.debug_name);
       if (!buffer_res.has_value())
       {
         for (u32 j = 0; j < i; ++j)

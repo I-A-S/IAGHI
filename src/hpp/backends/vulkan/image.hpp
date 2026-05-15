@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #pragma once
 
@@ -26,7 +18,8 @@ namespace ghi
 public:
     static auto create(VkDevice device, VmaAllocator allocator, VkFormat format, VkExtent3D extent,
                        VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                       VkImageUsageFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT, u32 layer_count = 1, u32 mip_level_count = 1) -> Result<VulkanImage>;
+                       VkImageUsageFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT, u32 layer_count = 1,
+                       u32 mip_level_count = 1) -> Result<VulkanImage>;
     auto destroy(VkDevice device, VmaAllocator allocator) -> void;
 
     [[nodiscard]] auto get_handle() const -> VkImage

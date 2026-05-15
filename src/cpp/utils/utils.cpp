@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #define STB_IMAGE_IMPLEMENTATION
 
@@ -108,10 +100,9 @@ namespace ghi::utils
         }
       }
 
-
-       AU_TRY_VAR(img, create_image_from_rgba(device, width, height, rgba_data.data(), EFormat::R8G8B8A8Unorm));
-       g_default_image=img;
-      }
+      AU_TRY_VAR(img, create_image_from_rgba(device, width, height, rgba_data.data(), EFormat::R8G8B8A8Unorm));
+      g_default_image = img;
+    }
 
     return {};
   }
@@ -165,7 +156,8 @@ namespace ghi::utils
     return g_default_sampler;
   }
 
-  auto create_image_from_file(Device device, const char *filepath, EFormat format, bool generate_mipmaps) -> Result<Image>
+  auto create_image_from_file(Device device, const char *filepath, EFormat format, bool generate_mipmaps)
+      -> Result<Image>
   {
     i32 w, h, nr;
     const auto data = stbi_load(filepath, &w, &h, &nr, STBI_rgb_alpha);
@@ -176,8 +168,8 @@ namespace ghi::utils
     return result;
   }
 
-  auto create_image_from_rgba(Device device, u32 width, u32 height, const u8 *rgba_data, EFormat format, bool generate_mipmaps)
-      -> Result<Image>
+  auto create_image_from_rgba(Device device, u32 width, u32 height, const u8 *rgba_data, EFormat format,
+                              bool generate_mipmaps) -> Result<Image>
   {
     Image image;
     u32 mip_levels = generate_mipmaps ? static_cast<u32>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;

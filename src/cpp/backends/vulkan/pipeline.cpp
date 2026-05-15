@@ -1,19 +1,11 @@
 // IAGHI: IA Graphics Hardware Interface
 //
 // Copyright (C) 2026 I-A-S (ias@iasoft.dev)
-// Copyright (C) 2026 IASoft PVT LTD (contact@iasoft.dev)
+// Copyright (C) 2026 IASoft (PVT) LTD (contact@iasoft.dev)
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// This source code is licensed under the PolyForm Noncommercial License 1.0.0.
+// A copy of this license is included in the LICENSE file at the root of this project,
+// and is also available at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 #include <backends/vulkan/pipeline.hpp>
 #include <backends/vulkan/backend.hpp>
@@ -165,7 +157,7 @@ namespace ghi
     };
 
     VkShaderStageFlags pc_stages = 0;
-    for (const auto& pc : push_constants)
+    for (const auto &pc : push_constants)
     {
       pc_stages |= pc.stageFlags;
     }
@@ -212,7 +204,7 @@ namespace ghi
   }
 
   auto VulkanGraphicsPipeline::create(VulkanDevice &device, const GraphicsPipelineDesc &desc)
-      -> Result<VulkanGraphicsPipeline*>
+      -> Result<VulkanGraphicsPipeline *>
   {
     auto result = new VulkanGraphicsPipeline();
 
@@ -232,7 +224,7 @@ namespace ghi
       bindings_layouts.push_back(reinterpret_cast<VulkanBindingLayout *>(desc.binding_layouts[i]));
     }
     AU_TRY_VAR(layout, VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
-    result->m_layout=std::move(layout);
+    result->m_layout = std::move(layout);
 
     const auto vertex_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.vertex_shader);
     const auto fragment_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.fragment_shader);
@@ -306,9 +298,8 @@ namespace ghi
       {
         color_attachment_formats.push_back(VulkanBackend::map_format_enum_to_vk(format));
       }
-      depth_attachment_format = desc.enable_depth_test
-                                    ? VulkanBackend::map_format_enum_to_vk(desc.depth_target_format)
-                                    : VK_FORMAT_UNDEFINED;
+      depth_attachment_format =
+          desc.enable_depth_test ? VulkanBackend::map_format_enum_to_vk(desc.depth_target_format) : VK_FORMAT_UNDEFINED;
     }
 
     VkPipelineRenderingCreateInfo rendering_info{};
@@ -363,7 +354,7 @@ namespace ghi
   }
 
   auto VulkanComputePipeline::create(VulkanDevice &device, const ComputePipelineDesc &desc)
-      -> Result<VulkanComputePipeline*>
+      -> Result<VulkanComputePipeline *>
   {
     auto result = new VulkanComputePipeline();
 
@@ -383,7 +374,7 @@ namespace ghi
       bindings_layouts.push_back(reinterpret_cast<VulkanBindingLayout *>(desc.binding_layouts[i]));
     }
     AU_TRY_VAR(layout, VulkanPipelineLayout::create(device, bindings_layouts, push_constants));
-    result->m_layout=std::move(layout);
+    result->m_layout = std::move(layout);
 
     const auto compute_shader_module = reinterpret_cast<const VulkanShaderModule *>(desc.compute_shader);
 
@@ -566,7 +557,8 @@ namespace ghi
       -> Result<Shader>
   {
     const auto dev = reinterpret_cast<VulkanDevice *>(device);
-    AU_TRY_VAR(shader, VulkanShaderModule::create(*dev, Span<const u32>(static_cast<const u32 *>(spirv_code), size >> 2),
+    AU_TRY_VAR(shader,
+               VulkanShaderModule::create(*dev, Span<const u32>(static_cast<const u32 *>(spirv_code), size >> 2),
                                           static_cast<VkShaderStageFlagBits>(map_shader_stage_enum_to_vk(stage))));
     return reinterpret_cast<Shader>(new VulkanShaderModule(std::move(shader)));
   }
@@ -602,13 +594,13 @@ namespace ghi
     const auto pipeline_impl = reinterpret_cast<VulkanPipelineBase *>(pipeline);
     if (pipeline_impl->get_bind_point() == VK_PIPELINE_BIND_POINT_GRAPHICS)
     {
-      const auto gfx = static_cast<VulkanGraphicsPipeline*>(pipeline_impl);
+      const auto gfx = static_cast<VulkanGraphicsPipeline *>(pipeline_impl);
       gfx->destroy(*dev);
       delete gfx;
     }
     else if (pipeline_impl->get_bind_point() == VK_PIPELINE_BIND_POINT_COMPUTE)
     {
-      const auto comp = static_cast<VulkanComputePipeline*>(pipeline_impl);
+      const auto comp = static_cast<VulkanComputePipeline *>(pipeline_impl);
       comp->destroy(*dev);
       delete comp;
     }
